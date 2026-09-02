@@ -24,18 +24,57 @@
   --white:#fffaf4;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{margin:0;width:100%;height:100%;overflow:hidden;background:var(--void);font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;color:var(--white)}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#000;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;color:var(--white)}
 button{font:inherit}
-#app{position:fixed;inset:0;display:grid;place-items:center;background:
-  radial-gradient(circle at 50% 35%,rgba(95,212,208,.08),transparent 32%),
-  linear-gradient(rgba(95,212,208,.025) 1px,transparent 1px),
-  linear-gradient(90deg,rgba(95,212,208,.025) 1px,transparent 1px);
-background-size:auto,32px 32px,32px 32px}
-.device{position:relative;width:min(94vw,520px);height:min(94vh,900px);padding:17px;border:1px solid #272d3c;border-radius:38px;background:#121622;box-shadow:inset 0 0 0 2px #1b2030,0 30px 80px rgba(0,0,0,.45);transition:width .35s,height .35s}
-.device.landscape{width:min(94vw,1000px);height:min(88vh,600px)}
-.notch{position:absolute;top:7px;left:50%;transform:translateX(-50%);width:78px;height:8px;border-radius:10px;background:#020307;z-index:50}
-.screen{position:relative;width:100%;height:100%;overflow:hidden;border-radius:27px;background:#000;box-shadow:inset 0 0 0 1px rgba(255,255,255,.12),inset 0 0 45px rgba(0,0,0,.6)}
-.scanlines{position:absolute;inset:0;pointer-events:none;opacity:.08;background:linear-gradient(transparent 50%,rgba(44,36,64,.18) 51%);background-size:100% 6px;z-index:1}
+#app{position:fixed;inset:0;width:100vw;height:100dvh;display:flex;align-items:stretch;justify-content:stretch;background:#000;margin:0;padding:0}
+.device{position:relative;width:100%!important;height:100%!important;max-width:100vw!important;max-height:100dvh!important;padding:0!important;border:none!important;border-radius:0!important;background:#000!important;box-shadow:none!important;margin:0!important}
+.device.landscape{width:100%!important;height:100%!important}
+.notch{display:none!important}
+.screen{position:relative;width:100%!important;height:100%!important;overflow:hidden;border-radius:0!important;background:#000!important;box-shadow:none!important;border:none!important}
+.scanlines{display:none!important}
+
+/* Edge-to-Edge Android / Mobile Full-Screen Standard */
+@media (max-width: 1024px), (hover: none) and (pointer: coarse) {
+  html, body {
+    width: 100vw;
+    height: 100dvh;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    background: #000;
+  }
+  #app {
+    width: 100vw;
+    height: 100dvh;
+    display: flex;
+    align-items: stretch;
+    justify-content: stretch;
+    padding: 0;
+    margin: 0;
+    background: #000;
+  }
+  .device {
+    width: 100vw !important;
+    height: 100dvh !important;
+    max-width: 100vw !important;
+    max-height: 100dvh !important;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    background: #000 !important;
+  }
+  .notch {
+    display: none !important;
+  }
+  .screen {
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    border: 0 !important;
+    width: 100%;
+    height: 100%;
+  }
+}
 
 /* HUD */
 .hud{position:absolute;top:15px;left:15px;right:15px;z-index:30}
@@ -88,8 +127,8 @@ background-size:auto,32px 32px,32px 32px}
 .visionSummary{display:none!important}
 
 /* ---------- Face Screen (Pure Black OLED) & Minimal Avatar ---------- */
-.avatarZone{position:absolute;inset:0;bottom:90px;display:flex;align-items:center;justify-content:center;z-index:10;pointer-events:none}
-.orbit{position:relative;width:100%;height:100%;max-width:540px;max-height:540px;display:flex;align-items:center;justify-content:center}
+.avatarZone{position:absolute;inset:0;bottom:0;display:flex;align-items:center;justify-content:center;z-index:10;pointer-events:none}
+.orbit{position:relative;width:100%;height:100%;display:flex;align-items:center;justify-content:center}
 #face{position:relative;width:100%;height:100%;display:block;pointer-events:none}
 /* Strip legacy HUD and clutter from Face screen */
 #screenFace .hud,
@@ -97,58 +136,52 @@ background-size:auto,32px 32px,32px 32px}
 #screenFace .status,
 #screenFace .scanlines{display:none!important}
 
-/* Status / caption - hidden at rest, fades in only when active */
+/* Status / caption - floating, sleek, auto-hides when inactive */
 .status{position:absolute;left:50%;transform:translateX(-50%);bottom:159px;z-index:26;display:none}
-.caption{position:absolute;left:50%;transform:translateX(-50%) translateY(10px);bottom:94px;width:min(88%,380px);min-height:48px;padding:10px 14px;border:1px solid rgba(0,229,255,.28);border-radius:18px;background:rgba(12,17,28,.88);color:#edf2fa;z-index:28;box-shadow:0 10px 30px rgba(0,0,0,.75),0 0 16px rgba(0,229,255,.14);backdrop-filter:blur(14px);opacity:0;pointer-events:none;transition:opacity .25s ease,transform .25s ease}
+.caption{position:absolute;left:50%;transform:translateX(-50%) translateY(8px);bottom:72px;width:min(88%,340px);min-height:38px;padding:8px 12px;border:1px solid rgba(0,229,255,.28);border-radius:14px;background:rgba(12,17,28,.88);color:#edf2fa;z-index:28;box-shadow:0 10px 30px rgba(0,0,0,.75),0 0 16px rgba(0,229,255,.14);backdrop-filter:blur(14px);opacity:0;pointer-events:none;transition:opacity .25s ease,transform .25s ease}
 .caption.show{opacity:1;pointer-events:auto;transform:translateX(-50%) translateY(0)}
-.captionTitle{font-size:7px;color:var(--cyan);letter-spacing:.14em;margin-bottom:4px;font-weight:700}
-.captionText{font-size:10.5px;line-height:1.4;display:block;padding-right:48px;color:#edf2fa}
-.bars{position:absolute;right:14px;bottom:14px;display:flex;align-items:center;gap:3px}
-.bars i{width:3px;height:8px;border-radius:3px;background:var(--cyan);opacity:.45}
+.captionTitle{font-size:7px;color:var(--cyan);letter-spacing:.14em;margin-bottom:3px;font-weight:700}
+.captionText{font-size:10px;line-height:1.35;display:block;padding-right:40px;color:#edf2fa}
+.bars{position:absolute;right:12px;bottom:10px;display:flex;align-items:center;gap:3px}
+.bars i{width:3px;height:7px;border-radius:3px;background:var(--cyan);opacity:.45}
 .caption.show .bars i{animation:bar .5s ease-in-out infinite alternate}
 .bars i:nth-child(2){animation-delay:.08s}.bars i:nth-child(3){animation-delay:.16s}.bars i:nth-child(4){animation-delay:.24s}.bars i:nth-child(5){animation-delay:.32s}
-@keyframes bar{to{height:18px;opacity:.9}}
+@keyframes bar{to{height:16px;opacity:.9}}
 
-/* Bottom controls on Face screen */
-.bottom{position:absolute;left:16px;right:16px;bottom:16px;z-index:31;display:flex;align-items:center;justify-content:space-between;gap:12px;min-width:0;overflow:visible}
-.controlsCol{flex:1;display:flex;align-items:center;min-width:0}
-.navBar{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;width:100%;margin-bottom:0}
-.navBtn{border:1px solid rgba(255,255,255,.14);background:rgba(18,24,36,.75);color:#8f98aa;border-radius:14px;padding:11px 8px;font:700 8.5px/1.2 ui-monospace,SFMono-Regular,monospace;letter-spacing:.09em;cursor:pointer;text-align:center;backdrop-filter:blur(8px);transition:all .2s ease;user-select:none;-webkit-user-select:none}
-.navBtn:hover{background:rgba(28,36,52,.9);color:#fff;border-color:rgba(255,255,255,.3)}
-.navBtn.active{background:rgba(0,229,255,.12);color:var(--cyan);border-color:var(--cyan);box-shadow:0 0 16px rgba(0,229,255,.35)}
-.mic{width:64px;height:64px;border:0;border-radius:50%;background:linear-gradient(145deg,#ff8a68,#d95e3c);box-shadow:0 8px 24px rgba(217,94,60,.42),inset 0 1px 2px rgba(255,255,255,.6);display:grid;place-items:center;cursor:pointer;flex-shrink:0;transition:transform .15s ease,box-shadow .15s ease}
-.mic svg{width:26px;height:26px}
-.mic:hover{transform:scale(1.05);box-shadow:0 10px 28px rgba(217,94,60,.55)}
+/* Bottom controls on Face screen: Non-congested sleek floating dock */
+.bottom{position:absolute;left:16px;right:16px;bottom:16px;z-index:31;display:flex;align-items:center;justify-content:space-between;gap:12px;min-width:0;overflow:visible;pointer-events:none}
+.controlsCol{display:inline-flex;align-items:center;pointer-events:auto}
+.navBar{display:inline-flex;gap:4px;background:rgba(14,18,28,.72);backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,.09);border-radius:24px;padding:4px}
+.navBtn{border:none;background:transparent;color:#8f98aa;border-radius:18px;padding:8px 14px;font:700 8.5px/1 ui-monospace,SFMono-Regular,monospace;letter-spacing:.08em;cursor:pointer;text-align:center;transition:all .15s ease;user-select:none;-webkit-user-select:none}
+.navBtn:hover{background:rgba(28,36,52,.9);color:#fff}
+.navBtn.active{background:rgba(0,229,255,.16);color:var(--cyan);box-shadow:0 0 12px rgba(0,229,255,.3)}
+.mic{pointer-events:auto;width:48px;height:48px;border:0;border-radius:50%;background:linear-gradient(145deg,#ff8a68,#d95e3c);box-shadow:0 6px 20px rgba(217,94,60,.38),inset 0 1px 2px rgba(255,255,255,.6);display:grid;place-items:center;cursor:pointer;flex-shrink:0;transition:transform .15s ease,box-shadow .15s ease}
+.mic svg{width:20px;height:20px}
+.mic:hover{transform:scale(1.05);box-shadow:0 8px 24px rgba(217,94,60,.5)}
 .mic:active{transform:scale(.95)}
 .mic.listening{animation:micPulse 1s infinite}
 .mic.talking{animation:talkPulse .55s infinite alternate}
-@keyframes micPulse{50%{box-shadow:0 8px 24px rgba(217,94,60,.42),0 0 0 13px rgba(255,118,84,0)}}
+@keyframes micPulse{50%{box-shadow:0 6px 20px rgba(217,94,60,.38),0 0 0 11px rgba(255,118,84,0)}}
 @keyframes talkPulse{to{transform:scale(1.06)}}
 
 /* Responsive breakpoints */
 @media(max-width:700px){
-  .bottom{left:12px;right:12px;bottom:14px;gap:8px}
-  .navBar{gap:6px}
-  .navBtn{padding:10px 4px;font-size:7.5px}
-  .mic{width:60px;height:60px}
-  .mic svg{width:24px;height:24px}
-  .caption{bottom:88px}
+  .bottom{left:12px;right:12px;bottom:12px}
+  .navBtn{padding:7px 11px;font-size:7.5px}
+  .mic{width:44px;height:44px}
+  .mic svg{width:18px;height:18px}
+  .caption{bottom:66px;width:min(90%,320px)}
 }
 @media(max-width:380px){
-  .bottom{left:10px;right:10px;bottom:12px;gap:6px}
-  .navBar{gap:5px}
-  .navBtn{padding:9px 3px;font-size:7px}
-  .mic{width:56px;height:56px}
-  .mic svg{width:22px;height:22px}
-  .caption{bottom:82px}
+  .bottom{left:8px;right:8px;bottom:10px}
+  .navBtn{padding:6px 9px;font-size:7px}
+  .mic{width:40px;height:40px}
+  .mic svg{width:16px;height:16px}
+  .caption{bottom:60px}
 }
-.device.landscape .avatarZone{top:5%;bottom:80px}
+.device.landscape .avatarZone{inset:0;bottom:0}
 .device.landscape .bottom{left:20px;right:20px;bottom:14px}
-.device.landscape .caption{bottom:88px}
-@media(min-width:700px){
-  .device{width:min(88vw,560px);height:min(92vh,920px)}
-  .device.landscape{width:min(94vw,1100px);height:min(86vh,650px)}
-}
+.device.landscape .caption{bottom:66px}
 
 /* ---------- 3-Screen Shell Sections ---------- */
 .screenSection{position:absolute;inset:0;width:100%;height:100%;overflow:hidden;display:none}
@@ -384,6 +417,26 @@ background-size:auto,32px 32px,32px 32px}
               </div>
             </section>
 
+            <!-- CLOUD AI & API KEYS CONFIGURATION -->
+            <section class="devCard" style="grid-column: 1 / -1;">
+              <div class="devHeaderRow" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
+                <div class="devTitle" style="margin-bottom:0;">CLOUD AI & API KEYS CONFIGURATION</div>
+                <button class="devAction" id="saveApiKeysBtn" style="background:rgba(0,229,255,.18);border-color:var(--cyan);color:var(--cyan);font-weight:700;">SAVE & RECONNECT AI</button>
+              </div>
+              <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;">
+                <div>
+                  <span class="metricLabel">GEMINI API KEY (Google AI Studio)</span>
+                  <input type="password" id="geminiKeyInput" placeholder="AIzaSy... (Paste key here)" style="width:100%;box-sizing:border-box;background:#0d111a;border:1px solid rgba(255,255,255,.14);border-radius:8px;color:#fff;padding:9px 12px;font-size:11px;outline:none;font-family:monospace;margin-top:4px;" />
+                  <div class="metricSub">Required for Gemini LLM brain & structured scene vision.</div>
+                </div>
+                <div>
+                  <span class="metricLabel">ELEVENLABS API KEY (Optional High-Fidelity Voice)</span>
+                  <input type="password" id="elevenKeyInput" placeholder="xi-api-key... (Optional)" style="width:100%;box-sizing:border-box;background:#0d111a;border:1px solid rgba(255,255,255,.14);border-radius:8px;color:#fff;padding:9px 12px;font-size:11px;outline:none;font-family:monospace;margin-top:4px;" />
+                  <div class="metricSub">Optional high-fidelity voices (browser TTS is active by default).</div>
+                </div>
+              </div>
+            </section>
+
             <section class="devCard">
               <div class="devTitle">VOICE PIPELINE</div>
               <div class="devRow"><span>Browser</span><b id="devBrowser">—</b></div>
@@ -459,6 +512,13 @@ background-size:auto,32px 32px,32px 32px}
   const camera = $("#camera");
   const faceTrackingOverlay = $("#faceTrackingOverlay");
   const visionOverlay = $("#visionOverlay");
+
+  let motorSafetyWatchdog = null;
+  let virtualRobot = null;
+  let esp32Hardware = null;
+  let robotConnectionManager = null;
+  let robotActionEngine = null;
+  let autonomousPlanner = null;
 
   const STATES = [
     "neutral","happy","curious","sleepy","listening","thinking","talking",
@@ -3767,8 +3827,12 @@ background-size:auto,32px 32px,32px 32px}
     if(!logEl) return;
     const line = document.createElement("div");
     line.textContent = "[" + new Date().toLocaleTimeString([], {hour12:false}) + "] " + msg;
-    logEl.prepend(line);
-    while(logEl.children.length > 5) logEl.lastElementChild.remove();
+    if(typeof logEl.prepend === 'function'){
+      logEl.prepend(line);
+    }else if(logEl.insertBefore){
+      logEl.insertBefore(line, logEl.firstChild);
+    }
+    while(logEl.children && logEl.children.length > 5) logEl.lastElementChild.remove();
   }
 
   // Developer diagnostics bridge. TTS events must appear in the copied diagnostic log,
@@ -4042,15 +4106,35 @@ background-size:auto,32px 32px,32px 32px}
       // Clear canvas (pure black background)
       ctx.clearRect(0, 0, cw, ch);
 
-      // Proportions matching the reference image:
-      // Subtle float oscillation gives living presence
+      // Proportions matching the hardware reference image:
+      // In Landscape & Portrait, make eyes and mouth LARGE, majestic and commanding
+      const isLandscape = cw > ch;
       const cx = cw / 2;
-      const cy = ch * 0.44 + Math.sin(t * 1.4) * (s * 0.008);
+      let ew, ehBase, eyeGap, cy, mouthW, mouthH, mouthY;
 
-      const ew = s * 0.225 * faceScale;
-      const ehBase = ew * 1.15;
+      if (isLandscape) {
+        // Landscape (horizontal robot face mount):
+        const eyeBase = Math.min(ch * 0.44, cw * 0.22);
+        ew = eyeBase * faceScale;
+        ehBase = ew * 1.08;
+        eyeGap = ew * 0.40;
+        cy = ch * 0.40 + Math.sin(t * 1.4) * (ch * 0.012);
+        mouthW = ew * 0.50 * (state === 'surprised' ? 0.75 : 1);
+        mouthH = ew * 0.24;
+        mouthY = cy + ehBase * 0.52 + Math.min(22, ch * 0.08);
+      } else {
+        // Portrait (vertical robot face mount):
+        const eyeBase = Math.min(cw * 0.32, ch * 0.22);
+        ew = eyeBase * faceScale;
+        ehBase = ew * 1.12;
+        eyeGap = ew * 0.36;
+        cy = ch * 0.38 + Math.sin(t * 1.4) * (cw * 0.015);
+        mouthW = ew * 0.52 * (state === 'surprised' ? 0.75 : 1);
+        mouthH = ew * 0.24;
+        mouthY = cy + ehBase * 0.52 + Math.min(26, ch * 0.05);
+      }
+
       const eh = Math.max(ew * 0.08, ehBase * eyeOpen * (1 - blinkAmount * 0.95));
-      const eyeGap = ew * 0.42;
       const cr = ew * 0.12;
 
       ctx.save();
@@ -4060,8 +4144,8 @@ background-size:auto,32px 32px,32px 32px}
       ctx.translate(-cx, -cy);
 
       // Electric glowing cyan color & glow
-      ctx.shadowColor = `rgba(0, 229, 255, ${0.35 + glow * 0.35})`;
-      ctx.shadowBlur = Math.round(s * (0.024 + glow * 0.016));
+      ctx.shadowColor = `rgba(0, 229, 255, ${0.40 + glow * 0.35})`;
+      ctx.shadowBlur = Math.round(ew * (0.16 + glow * 0.14));
       ctx.fillStyle = '#00e5ff';
 
       const isHappy = ['happy', 'excited', 'love'].includes(state);
@@ -4075,11 +4159,8 @@ background-size:auto,32px 32px,32px 32px}
         drawDomeEye(ctx, ex, cy, ew, eh, cr, browSlant, isHappy, side);
       });
 
-      // Mouth: small centered glowing pill below eyes
-      const mouthY = cy + ehBase * 0.52 + s * 0.08;
-      const mw = ew * 0.36 * (state === 'surprised' ? 0.8 : 1);
-      const mh = ew * 0.20;
-      drawMouth(ctx, cx, mouthY, mw, mh, mouth, talkOpen, state);
+      // Mouth: glowing pill below eyes
+      drawMouth(ctx, cx, mouthY, mouthW, mouthH, mouth, talkOpen, state);
 
       ctx.restore();
 
@@ -4099,6 +4180,9 @@ background-size:auto,32px 32px,32px 32px}
   function frame(now){
     const dt=Math.min(50,now-lastFrame);lastFrame=now;
     drawFace(dt);
+    if(typeof motorSafetyWatchdog !== 'undefined' && motorSafetyWatchdog) {
+      motorSafetyWatchdog.feedHeartbeat();
+    }
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
@@ -4108,17 +4192,15 @@ background-size:auto,32px 32px,32px 32px}
   let micPermissionStream=null;
   let sttStarting=false;
 
-  function stopMicStream(){
-    if(micStream){ micStream.getTracks().forEach(t=>t.stop()); micStream=null; }
-    if(micPermissionStream){ micPermissionStream.getTracks().forEach(t=>t.stop()); micPermissionStream=null; }
-    if(micAnalyser){ micAnalyser.disconnect(); micAnalyser=null; }
+  function stopMicMeter(){
     if(micAudioContext){ micAudioContext.close().catch(()=>{}); micAudioContext=null; }
     if(micMeterRAF){ cancelAnimationFrame(micMeterRAF); micMeterRAF=null; }
     micVoiceLevel=0;
   }
 
-  function setVoiceStatus(text){
+  function setVoiceStatus(text, autoHideMs = 3500){
     showCaption(text,true);
+    if(autoHideMs) hideCaption(autoHideMs);
     log('VOICE · '+text);
   }
 
@@ -5638,9 +5720,13 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
           : null
     };
 
+    const headers = { 'Content-Type': 'application/json' };
+    const savedGeminiKey = localStorage.getItem('robo_gemini_api_key');
+    if(savedGeminiKey) headers['x-gemini-key'] = savedGeminiKey;
+
     const res = await fetch('/api/robo',{
       method:'POST',
-      headers:{'Content-Type':'application/json'},
+      headers,
       body:JSON.stringify(payload),
       ...(signal ? {signal} : {})
     });
@@ -5925,9 +6011,13 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
     log('TTS · ENGINE ENTRY · ElevenLabs · language='+languageHint);
     ttsDiag('ENGINE ENTRY · ElevenLabs',{language:languageHint});
     console.info('[ROBO TTS DEBUG] ElevenLabs function entered',languageHint);
+    const headers = { 'Content-Type': 'application/json' };
+    const savedElevenKey = localStorage.getItem('robo_elevenlabs_api_key');
+    if(savedElevenKey) headers['x-elevenlabs-key'] = savedElevenKey;
+
     const response=await fetch('/api/robo',{
       method:'POST',
-      headers:{'Content-Type':'application/json'},
+      headers,
       cache:'no-store',
       body:JSON.stringify({tts:true,text:String(text||''),languageHint:languageHint || 'en'})
     });
@@ -6095,7 +6185,7 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
   });
 
   /* ---------- Voice diagnostic button behavior ---------- */
-  $('#mediaText').addEventListener('click',()=>{
+  $('#mediaText')?.addEventListener('click',()=>{
     if(micPermissionStream) releaseMicForSTT();
     setVoiceStatus('MIC READY · Chrome STT owns the microphone when you tap the orange mic');
   });
@@ -6124,7 +6214,7 @@ if(devStt)devStt.textContent=(window.SpeechRecognition||window.webkitSpeechRecog
 if(devCamera)devCamera.textContent=navigator.mediaDevices?.getUserMedia?"API READY":"UNAVAILABLE";
 if(devMic)devMic.textContent=navigator.mediaDevices?.getUserMedia?"API READY":"UNAVAILABLE";
 if(devMicPermission)devMicPermission.textContent="UNKNOWN · tap CAMERA or MIC";
-if(devLocalStt)devLocalStt.textContent=(window.SpeechRecognition&&"processLocally" in SpeechRecognition.prototype)?"SUPPORTED API":"NOT EXPOSED";
+if(devLocalStt)devLocalStt.textContent=(window.SpeechRecognition&&"processLocally" in window.SpeechRecognition.prototype)?"SUPPORTED API":"NOT EXPOSED";
 if(devWake)devWake.textContent=wakeArmed?(wakeRecognition?"LISTENING":"ARMED · STARTING"):"OFF";
 async function refreshMicPermissionDiagnostic(){
   if(!devMicPermission)return;
@@ -6140,7 +6230,13 @@ refreshMicPermissionDiagnostic();
 
 async function refreshAIProviderDiagnostic(){
   try{
-    const res=await fetch('/api/robo',{method:'GET',cache:'no-store'});
+    const headers = {};
+    const savedGeminiKey = localStorage.getItem('robo_gemini_api_key');
+    if(savedGeminiKey) headers['x-gemini-key'] = savedGeminiKey;
+    const savedElevenKey = localStorage.getItem('robo_elevenlabs_api_key');
+    if(savedElevenKey) headers['x-elevenlabs-key'] = savedElevenKey;
+
+    const res=await fetch('/api/robo',{method:'GET',cache:'no-store',headers});
     const data=await res.json().catch(()=>({}));
     if(!res.ok){
       if(devAI)devAI.textContent='AI ERROR · DIAGNOSTIC HTTP '+res.status;
@@ -6157,8 +6253,8 @@ async function refreshAIProviderDiagnostic(){
     const visionRow=[...document.querySelectorAll('#devChecks .devCheck')]
       .find(el=>el.firstElementChild?.textContent==='Structured vision state');
     if(visionRow){
-      visionRow.className='devCheck '+(window.__roboStructuredVisionReady?'ok':'fail');
-      visionRow.lastElementChild.textContent=window.__roboStructuredVisionReady?'PASS':'FAIL';
+      visionRow.className='devCheck '+(window.__roboStructuredVisionReady?'ok':(data.configured?'fail':'warn'));
+      visionRow.lastElementChild.textContent=window.__roboStructuredVisionReady?'PASS':(data.configured?'FAIL':'NEEDS API KEY');
     }
 
     const row=[...document.querySelectorAll('#devChecks .devCheck')]
@@ -6180,13 +6276,6 @@ async function refreshAIProviderDiagnostic(){
 loadRoboMemory();
   factoryResetMemoryForV290();
 
-var motorSafetyWatchdog = null;
-var virtualRobot = null;
-var esp32Hardware = null;
-var robotConnectionManager = null;
-var robotActionEngine = null;
-var autonomousPlanner = null;
-
 function runDevChecks(){
   const list=[
     ["HTTPS / localhost",location.protocol==="https:"||location.hostname==="localhost"||location.hostname==="127.0.0.1"],
@@ -6197,7 +6286,7 @@ function runDevChecks(){
     ["Camera",!!$("#camera") && !!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia)],
     ["3D emoji canvas",!!$("#face")],
     ["Media permission API",!!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia)],
-    ["On-device STT API",!!(window.SpeechRecognition&&"processLocally" in SpeechRecognition.prototype)],
+    ["On-device STT API",!!(window.SpeechRecognition&&"processLocally" in window.SpeechRecognition.prototype)],
     ["AI adapter route",true],
     ["Camera vision capture",!!(cameraEnabled && cameraStream && $("#camera")?.videoWidth>1 && $("#camera")?.videoHeight>1)],
     ["Camera state",cameraEnabled && !!cameraStream],
@@ -6334,11 +6423,11 @@ runDevChecks();
   if(screenCamSwitch2) screenCamSwitch2.addEventListener("click", () => switchCamera());
   const screenCamEnroll = $("#screenCameraEnrollBtn");
   if(screenCamEnroll) screenCamEnroll.addEventListener("click", () => enrollCurrentFace());
-$("#clearLogs").addEventListener("click",()=>{
+$("#clearLogs")?.addEventListener("click",()=>{
   devLogLines=["[CLEARED] Log cleared by user."];
   devLogs.textContent=devLogLines[0];
 });
-$("#copyLogs").addEventListener("click",async()=>{
+$("#copyLogs")?.addEventListener("click",async()=>{
   const payload=[
     "ROBO AIOS v2.94 FACE OVERLAY FIX · v2.81 PERCEPTION BASELINE",
     "Time: "+new Date().toISOString(),
@@ -6426,10 +6515,11 @@ function hookRecognitionDiagnostics(r){
   /* ---------- Orientation test ---------- */
   function setOrientation(land){
     device.classList.toggle("landscape",land);
-    $("#orientationBtn").textContent=land?"PORTRAIT TEST":"LANDSCAPE TEST";
+    const ob = $("#orientationBtn");
+    if(ob) ob.textContent=land?"PORTRAIT TEST":"LANDSCAPE TEST";
     log("orientation test → "+(land?"landscape":"portrait"));
   }
-  $("#orientationBtn").addEventListener("click",()=>setOrientation(!device.classList.contains("landscape")));
+  $("#orientationBtn")?.addEventListener("click",()=>setOrientation(!device.classList.contains("landscape")));
 
   /* ---------- Developer states ---------- */
   const stateGrid=$("#stateGrid");
@@ -6481,6 +6571,17 @@ function hookRecognitionDiagnostics(r){
     }
 
     checkWatchdog() {
+      // Only trip watchdog if motors were actively commanded to move or BLE is active
+      const isDriving = (virtualRobot && (virtualRobot.leftPwm !== 0 || virtualRobot.rightPwm !== 0));
+      const isBleActive = (esp32Hardware && esp32Hardware.connected);
+      if (!isDriving && !isBleActive) {
+        this.lastHeartbeatAt = Date.now();
+        if (this.isWatchdogTripped) {
+          this.isWatchdogTripped = false;
+        }
+        return;
+      }
+
       const elapsed = Date.now() - this.lastHeartbeatAt;
       if (elapsed > this.WATCHDOG_TIMEOUT_MS && !this.isWatchdogTripped) {
         this.isWatchdogTripped = true;
@@ -7135,6 +7236,26 @@ function hookRecognitionDiagnostics(r){
       btn.textContent = `AUTONOMY: ${autonomousPlanner.autonomyEnabled ? 'ON' : 'OFF'}`;
       btn.classList.toggle('active', autonomousPlanner.autonomyEnabled);
     }
+  });
+
+  // Wire API Keys in Dev Screen
+  const geminiInput = $('#geminiKeyInput');
+  const elevenInput = $('#elevenKeyInput');
+  if (geminiInput) geminiInput.value = localStorage.getItem('robo_gemini_api_key') || '';
+  if (elevenInput) elevenInput.value = localStorage.getItem('robo_elevenlabs_api_key') || '';
+
+  $('#saveApiKeysBtn')?.addEventListener('click', async () => {
+    const gKey = geminiInput?.value?.trim() || '';
+    const eKey = elevenInput?.value?.trim() || '';
+    if (gKey) localStorage.setItem('robo_gemini_api_key', gKey);
+    else localStorage.removeItem('robo_gemini_api_key');
+    if (eKey) localStorage.setItem('robo_elevenlabs_api_key', eKey);
+    else localStorage.removeItem('robo_elevenlabs_api_key');
+
+    showCaption('API Keys Saved! Reconnecting AI brain…', true);
+    hideCaption(3000);
+    await refreshAIProviderDiagnostic();
+    runDevChecks();
   });
 
   /* ---------- BLE / ESP32 scaffold ---------- */

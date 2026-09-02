@@ -299,8 +299,10 @@ const PROVIDERS = {
       cameraEnabled = false,
       cameraSession = null,
       languageHint = 'en',
+      apiKey = null,
     }) {
       const key =
+        apiKey ||
         process.env.GEMINI_API_KEY;
 
       if (!key) {
@@ -533,12 +535,17 @@ function detectTTSLanguage(text) {
 async function elevenLabsTTS(
   text,
   languageHint='en',
+  customKey=null,
+  customVoice=null,
 ) {
   const apiKey =
+    customKey ||
     process.env.ELEVENLABS_API_KEY;
 
   const voiceId =
-    process.env.ELEVENLABS_VOICE_ID;
+    customVoice ||
+    process.env.ELEVENLABS_VOICE_ID ||
+    '21m00Tcm4TlvDq8ikWAM';
 
   if (!apiKey) {
     throw makeError(
@@ -746,10 +753,13 @@ export default async function handler(
     ).toLowerCase();
 
   if (req.method === 'GET') {
+    const customGeminiKey = req.headers['x-gemini-key'];
+    const customElevenKey = req.headers['x-elevenlabs-key'];
+
     const configured =
       providerName === 'gemini'
         ? Boolean(
-            process.env.GEMINI_API_KEY,
+            process.env.GEMINI_API_KEY || customGeminiKey,
           )
         : false;
 
@@ -780,13 +790,13 @@ export default async function handler(
           configured:
             Boolean(
               process.env
-                .ELEVENLABS_API_KEY,
+                .ELEVENLABS_API_KEY || customElevenKey,
             ),
 
           voiceConfigured:
             Boolean(
               process.env
-                .ELEVENLABS_VOICE_ID,
+                .ELEVENLABS_VOICE_ID || customElevenKey,
             ),
 
           model:
@@ -855,6 +865,8 @@ export default async function handler(
           await elevenLabsTTS(
             text,
             languageHint,
+            req.headers['x-elevenlabs-key'],
+            req.headers['x-elevenlabs-voice-id'],
           );
 
         res.setHeader(
@@ -1058,6 +1070,9 @@ export default async function handler(
         cameraSession,
 
         languageHint,
+
+        apiKey:
+          req.headers['x-gemini-key'] || null,
       });
 
     return json(
