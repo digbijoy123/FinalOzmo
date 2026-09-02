@@ -181,7 +181,10 @@ button{font:inherit}
 }
 .device.landscape .avatarZone{inset:0;bottom:0}
 .device.landscape .bottom{left:20px;right:20px;bottom:14px}
-.device.landscape .caption{bottom:66px}
+.device.landscape .caption{bottom:12px!important;width:auto;max-width:min(80%,360px);padding:6px 14px;min-height:32px;border-radius:12px}
+@media (orientation: landscape){
+  .caption{bottom:12px!important;width:auto;max-width:min(80%,360px);padding:6px 14px;min-height:32px;border-radius:12px}
+}
 
 /* ---------- 3-Screen Shell Sections ---------- */
 .screenSection{position:absolute;inset:0;width:100%;height:100%;overflow:hidden;display:none}
@@ -3999,6 +4002,43 @@ button{font:inherit}
     }
 
     ctx.fill();
+
+    // Specular eye glare highlight (OLED optical reflection to make eyes look real)
+    const glareAlpha = Math.max(0, Math.min(1, (eh - ew * 0.16) / (ew * 0.45))) * 0.88;
+    if (glareAlpha > 0.08) {
+      ctx.save();
+      // Turn off drop shadow for crisp specular glass glare
+      ctx.shadowColor = 'transparent';
+      ctx.shadowBlur = 0;
+
+      if (isHappy) {
+        // Subtle glossy shimmer along the smiling crescent
+        ctx.fillStyle = `rgba(255, 255, 255, ${glareAlpha * 0.55})`;
+        ctx.beginPath();
+        ctx.ellipse(halfW * 0.15, -halfH * 0.25, ew * 0.16, Math.max(2, eh * 0.08), -0.1, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        // High-end companion robot primary specular glare (upper-right rounded highlight)
+        const gx = halfW * 0.26;
+        const gy = -halfH * 0.40;
+        const gw = ew * 0.22;
+        const gh = Math.max(3, eh * 0.18);
+
+        ctx.rotate(-0.16);
+        ctx.fillStyle = `rgba(255, 255, 255, ${glareAlpha * 0.82})`;
+        ctx.beginPath();
+        drawRoundedRect(ctx, gx - gw / 2, gy - gh / 2, gw, gh, gh / 2);
+        ctx.fill();
+
+        // Secondary subtle micro-glare dot
+        ctx.fillStyle = `rgba(255, 255, 255, ${glareAlpha * 0.60})`;
+        ctx.beginPath();
+        ctx.arc(gx + gw * 0.62, gy + gh * 0.72, Math.max(1.5, ew * 0.038), 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+
     ctx.restore();
   }
 
@@ -4118,10 +4158,10 @@ button{font:inherit}
         ew = eyeBase * faceScale;
         ehBase = ew * 1.08;
         eyeGap = ew * 0.40;
-        cy = ch * 0.40 + Math.sin(t * 1.4) * (ch * 0.012);
-        mouthW = ew * 0.50 * (state === 'surprised' ? 0.75 : 1);
-        mouthH = ew * 0.24;
-        mouthY = cy + ehBase * 0.52 + Math.min(22, ch * 0.08);
+        cy = ch * 0.35 + Math.sin(t * 1.4) * (ch * 0.010);
+        mouthW = ew * 0.48 * (state === 'surprised' ? 0.75 : 1);
+        mouthH = ew * 0.22;
+        mouthY = cy + ehBase * 0.50 + Math.min(16, ch * 0.05);
       } else {
         // Portrait (vertical robot face mount):
         const eyeBase = Math.min(cw * 0.32, ch * 0.22);
@@ -4384,19 +4424,19 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
         video:{
           facingMode:{ideal:facingMode},
           width:{ideal:1280},
-          height:{ideal:720},
-          frameRate:{ideal:30,max:30}
+          height:{ideal:720}
         },
         audio:false
       };
       stream=await getUserMediaSingleFlight(preferred,requestSession);
     }catch(firstErr){
-      log('CAM · permission/device request failed · '+(firstErr?.code||firstErr?.name||'unknown'));
+      log('CAM · preferred constraints failed, trying fallback · '+(firstErr?.code||firstErr?.name||'unknown'));
       if(requestSession!==cameraSession) throw new DOMException('Camera start was cancelled','AbortError');
-      if(firstErr?.name==='OverconstrainedError' || firstErr?.name==='NotFoundError'){
+      try{
+        stream=await getUserMediaSingleFlight({video:{facingMode:{ideal:facingMode}},audio:false},requestSession);
+      }catch(secondErr){
+        log('CAM · facingMode constraint failed, using basic video · '+(secondErr?.name||'unknown'));
         stream=await getUserMediaSingleFlight({video:true,audio:false},requestSession);
-      }else{
-        throw firstErr;
       }
     }
 
@@ -4419,33 +4459,38 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
     video.muted=true;
     video.setAttribute('autoplay','');
     video.setAttribute('playsinline','');
+    video.setAttribute('muted','');
     video.srcObject=stream;
     box.classList.remove('empty');
 
     const waitForVideoFrame=()=>new Promise((resolve,reject)=>{
-      const deadline=performance.now()+4000;
+      const deadline=performance.now()+7000;
       let done=false;
       let timer=null;
       const finish=(err)=>{
         if(done)return;
         done=true;
-        clearTimeout(timer);
+        clearInterval(timer);
         video.removeEventListener('loadedmetadata',check);
+        video.removeEventListener('loadeddata',check);
         video.removeEventListener('canplay',check);
         video.removeEventListener('playing',check);
+        video.removeEventListener('timeupdate',check);
         track.removeEventListener('ended',onEnded);
         if(err) reject(err); else resolve();
       };
       const check=()=>{
-        if(video.videoWidth>1 && video.videoHeight>1) finish();
+        if((video.videoWidth>1 && video.videoHeight>1) || video.readyState>=2) finish();
         else if(performance.now()>=deadline) finish(new Error('Camera opened but no video frame became available'));
       };
       const onEnded=()=>finish(new Error('Camera track ended while starting'));
       video.addEventListener('loadedmetadata',check);
+      video.addEventListener('loadeddata',check);
       video.addEventListener('canplay',check);
       video.addEventListener('playing',check);
+      video.addEventListener('timeupdate',check);
       track.addEventListener('ended',onEnded,{once:true});
-      timer=setInterval(check,100);
+      timer=setInterval(check,50);
       check();
     });
 
@@ -4649,24 +4694,41 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
   let sttLastErrorCode="";
   let sttNoMatch=false;
   let sttWatchdog=null;
+  let sttStartingWatchdog=null;
 
   /* ---------- Wake Engine v1 ----------
      Experimental layer built on the frozen v2.81 perception baseline.
      One explicit microphone gesture arms the background wake listener.
      Manual mic remains available as a deterministic fallback.
   */
-  const WAKE_PHRASE_RE=/\b(?:hey[\s,]+)?(?:robo|robot|robu|rubo|roboai|roboaios)\b/i;
+  const WAKE_PHRASE_RE=/\b(?:hey[\s,]+|ok[\s,]+|okay[\s,]+|hello[\s,]+|hi[\s,]+)?(?:ozmo|osmo|osmoe|ozmoe|ozma|asmo|cosmo|robo|robot|robu|rubo|roboai|roboaios)\b/i;
+  const WAKE_WORDS=['ozmo','osmo','osmoe','ozmoe','ozma','asmo','cosmo','ozon','robo','robot','robu','rubo','roboai','roboaios'];
+
   function normalizeWakeText(text){return String(text||'').toLowerCase().replace(/[^a-z0-9\s]/g,' ').replace(/\s+/g,' ').trim();}
-  function wakeTokenLooksLikeRobo(token){
+
+  function wakeTokenLooksLikeWakeWord(token){
     const t=normalizeWakeText(token); if(!t) return false;
-    if(['robo','robot','robu','rubo','roboai','roboaios'].includes(t)) return true;
-    if(t.length<4||t.length>6) return false;
-    const a='robo'; let prev=[0,1,2,3,4];
-    for(let i=1;i<=t.length;i++){const cur=[i];for(let j=1;j<=a.length;j++)cur[j]=Math.min(cur[j-1]+1,prev[j]+1,prev[j-1]+(t[i-1]===a[j-1]?0:1));prev=cur;}
-    return prev[4]<=1;
+    if(WAKE_WORDS.includes(t)) return true;
+    if(t.length<3||t.length>7) return false;
+
+    // Levenshtein distance check against 'ozmo'
+    const a1='ozmo'; let p1=[0,1,2,3,4];
+    for(let i=1;i<=t.length;i++){const cur=[i];for(let j=1;j<=a1.length;j++)cur[j]=Math.min(cur[j-1]+1,p1[j]+1,p1[j-1]+(t[i-1]===a1[j-1]?0:1));p1=cur;}
+    if(p1[4]<=1) return true;
+
+    // Levenshtein distance check against 'osmo'
+    const a2='osmo'; let p2=[0,1,2,3,4];
+    for(let i=1;i<=t.length;i++){const cur=[i];for(let j=1;j<=a2.length;j++)cur[j]=Math.min(cur[j-1]+1,p2[j]+1,p2[j-1]+(t[i-1]===a2[j-1]?0:1));p2=cur;}
+    if(p2[4]<=1) return true;
+
+    // Levenshtein distance check against 'robo'
+    const a3='robo'; let p3=[0,1,2,3,4];
+    for(let i=1;i<=t.length;i++){const cur=[i];for(let j=1;j<=a3.length;j++)cur[j]=Math.min(cur[j-1]+1,p3[j]+1,p3[j-1]+(t[i-1]===a3[j-1]?0:1));p3=cur;}
+    return p3[4]<=1;
   }
+
   const WAKE_COMMAND_WINDOW_MS=7000;
-  const WAKE_RESTART_DELAY_MS=500;
+  const WAKE_RESTART_DELAY_MS=400;
   let wakeRecognition=null;
   let wakeArmed=false;
   let wakeStarting=false;
@@ -4687,9 +4749,13 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
   function parseWakeUtterance(text){
     const clean=normalizeWakeText(text); if(!clean) return {woken:false,command:''};
     const tokens=clean.split(' '); let wakeIndex=-1;
-    for(let i=0;i<tokens.length;i++){if(['hey','hi','hello'].includes(tokens[i])) continue; if(wakeTokenLooksLikeRobo(tokens[i])){wakeIndex=i;break;}}
+    for(let i=0;i<tokens.length;i++){
+      if(['hey','hi','hello','ok','okay'].includes(tokens[i])) continue;
+      if(wakeTokenLooksLikeWakeWord(tokens[i])){wakeIndex=i;break;}
+    }
     if(wakeIndex<0) return {woken:false,command:''};
-    return {woken:true,command:tokens.slice(wakeIndex+1).join(' ').trim()};
+    const command=tokens.slice(wakeIndex+1).join(' ').trim();
+    return {woken:true,command};
   }
 
   function stopWakeEngine(reason='stopped'){
@@ -4704,7 +4770,7 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
     wakeTranscriptBuffer="";
     wakeTranscriptBufferAt=0;
     if(r){
-      try{r.stop();}catch(_){}
+      try{r.abort();}catch(_){}
     }
     if(reason) wakeEvent('listener stopped · '+reason);
   }
@@ -4731,7 +4797,7 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
     wakeCommandArmed=false;
     wakeCommandStartedAt=0;
     wakeEvent('armed · '+reason);
-    setVoiceStatus('WAKE READY · say “Robo” to talk');
+    setVoiceStatus('OZMO READY · say “Ozmo” to talk');
     scheduleWakeEngineRestart(80);
     return true;
   }
@@ -4763,14 +4829,14 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
         wakeEvent('listener active');
         if(!listening && !talking){
           setVoiceStatus(wakeCommandArmed
-            ? 'WAKE ACTIVE · speak your command'
-            : 'WAKE ACTIVE · say “Robo”');
+            ? 'OZMO ACTIVE · speak your command'
+            : 'OZMO ACTIVE · say “Ozmo”');
         }
       };
 
       r.onspeechstart=()=>{
         if(session!==wakeSession) return;
-        wakeEvent('speech heard · waiting for wake phrase');
+        wakeEvent('speech heard · listening for Ozmo');
       };
 
       r.onresult=(e)=>{
@@ -4789,29 +4855,25 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
 
         const text=(finalText||interimText).trim();
         if(!text) return;
-        const nowWake=performance.now();
-        if(nowWake-wakeTranscriptBufferAt>1400) wakeTranscriptBuffer='';
-        wakeTranscriptBuffer=(wakeTranscriptBuffer+' '+text).trim().slice(-180);
-        wakeTranscriptBufferAt=nowWake;
-        const combinedWake=wakeTranscriptBuffer;
+        wakeTranscriptBuffer=text;
+        wakeTranscriptBufferAt=performance.now();
 
         if(!wakeCommandArmed){
-          const parsed=parseWakeUtterance(combinedWake);
+          const parsed=parseWakeUtterance(text);
           if(!parsed.woken) return;
 
           wakeLastPhraseAt=Date.now();
           wakeEvent('wake phrase detected',{
             text,
-            normalized:normalizeWakeText(combinedWake),
             inlineCommand:Boolean(parsed.command)
           });
 
           wakeCommandArmed=true;
           wakeCommandStartedAt=performance.now();
-          setState('listening','wake · listening for you');
-          setVoiceStatus('WAKE DETECTED · speak now');
+          setState('listening','wake · listening to you');
+          setVoiceStatus(parsed.command ? ('OZMO HEARD · ' + parsed.command) : 'OZMO LISTENING · speak now');
 
-          if(parsed.command && finalText){
+          if(parsed.command && (finalText || parsed.command.split(' ').length >= 2)){
             wakeCommandArmed=false;
             wakeCommandStartedAt=0;
             stopWakeEngine('inline wake command');
@@ -4836,7 +4898,7 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
           const rawCommand=finalText.trim();
           const parsedCommand=parseWakeUtterance(rawCommand);
           const command=parsedCommand.woken ? parsedCommand.command : rawCommand;
-          if(command && command.toLowerCase()!=='robo'){
+          if(command && !WAKE_WORDS.includes(command.toLowerCase())){
             wakeCommandArmed=false;
             wakeCommandStartedAt=0;
             stopWakeEngine('command received');
@@ -4957,6 +5019,7 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
 
     r.onstart=()=>{
       listening=true; sttStarting=false; sttHadResult=false; sttHadSpeech=false; sttLastErrorCode=''; sttNoMatch=false;
+      clearTimeout(sttStartingWatchdog);
       clearTimeout(sttWatchdog);
       sttWatchdog=setTimeout(()=>{
         if(listening && sttHadSpeech && !sttHadResult){
@@ -5000,6 +5063,7 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
 
     r.onerror=(e)=>{
       listening=false; sttStarting=false; micBtn.classList.remove('listening');
+      clearTimeout(sttStartingWatchdog);
       clearTimeout(sttWatchdog);
       const code=e&&e.error?e.error:'unknown';
       sttLastErrorCode=code;
@@ -5033,6 +5097,7 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
 
     r.onend=()=>{
       listening=false; sttStarting=false; micBtn.classList.remove('listening');
+      clearTimeout(sttStartingWatchdog);
       clearTimeout(sttWatchdog);
       releaseMicForSTT();
       sttEvent('ended');
@@ -5058,8 +5123,12 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
   if(SR) recognition=buildRecognition();
 
   async function startSTT(isRetry=false){
-    if(!recognition){setVoiceStatus('STT UNAVAILABLE · Chrome SpeechRecognition not exposed');return;}
-    if(listening||sttStarting)return;
+    if(!SR){setVoiceStatus('STT UNAVAILABLE · Chrome SpeechRecognition not exposed');return;}
+    if(listening) return;
+
+    // Reset sttStarting if it hung
+    sttStarting=false;
+    clearTimeout(sttStartingWatchdog);
 
     stopWakeEngine('manual STT handoff');
     wakeCommandArmed=false;
@@ -5070,42 +5139,46 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
     try{
       sttSession++;
       if(!isRetry) sttRetryUsed=false;
+      if(recognition){try{recognition.abort();}catch(_){}}
       recognition=buildRecognition();
       sttStarting=true;
+      clearTimeout(sttStartingWatchdog);
+      sttStartingWatchdog=setTimeout(()=>{
+        if(sttStarting && !listening){
+          sttStarting=false;
+          micBtn.classList.remove('listening');
+          log('STT · start timeout · ready for tap');
+        }
+      },2200);
 
       // Stop TTS and every getUserMedia audio resource before asking Google
-      // SpeechRecognition for the microphone. Android Chrome does not reliably
-      // allow both to own the audio input at the same time.
+      // SpeechRecognition for the microphone.
       stopRoboAudio('STT requested');
       if('speechSynthesis' in window) speechSynthesis.cancel();
       releaseMicForSTT();
 
-      setVoiceStatus(isRetry?'STT RETRY · speak now…':'STT STARTING · microphone released · speak now…');
+      setVoiceStatus(isRetry?'STT RETRY · speak now…':'STT STARTING · speak now…');
 
       if(talking){
         talking=false;
         micBtn.classList.remove('talking');
       }
 
-      // IMPORTANT: do not await a timer here. On Android Chrome, delaying
-      // SpeechRecognition.start() can break the user-gesture/audio handoff.
-      // The microphone getUserMedia tracks were already stopped above.
       sttEventForStart('calling SpeechRecognition.start()');
       recognition.start();
     }catch(e){
       sttStarting=false;
+      clearTimeout(sttStartingWatchdog);
       console.warn(e);
       log('STT start exception · '+(e?.name||'unknown')+' · '+(e?.message||''));
 
-      // A failed start can leave a stale audio resource behind. Release it
-      // before reporting the error so the next tap starts cleanly.
       releaseMicForSTT();
 
       const msg=e?.name==='InvalidStateError'
         ? 'STT BUSY · tap mic again'
         : 'STT START FAILED · '+(e?.message||e?.name||'unknown error');
       setVoiceStatus(msg);
-      hideCaption(6000);
+      hideCaption(4000);
       if(wakeArmed && e?.name!=='NotAllowedError' && e?.name!=='SecurityError'){
         scheduleWakeEngineRestart(800);
       }
@@ -6179,8 +6252,19 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
   micBtn.addEventListener('click',async()=>{
     lastActivity=performance.now();
     armWakeFromUserGesture();
-    if(listening){try{recognition.stop();}catch(_){ }return;}
     if('speechSynthesis' in window) speechSynthesis.cancel();
+
+    // If already listening or starting, tap acts as an immediate clean stop
+    if(listening || sttStarting){
+      listening=false;
+      sttStarting=false;
+      micBtn.classList.remove('listening');
+      clearTimeout(sttStartingWatchdog);
+      try{recognition?.abort();}catch(_){}
+      setVoiceStatus('MIC OFF · tap to speak', 2000);
+      return;
+    }
+
     await startSTT(false);
   });
 
@@ -6299,10 +6383,10 @@ function runDevChecks(){
     ["Multi-person memory registry",!!(roboMemory&&Array.isArray(roboMemory.persons)&&roboMemory.persons.length>0)],
     ["Active identity resolver",typeof findFaceMatch==="function"&&typeof setActivePerson==="function"],
     ["Live face → social coupling",typeof deriveLiveSocialFromFaces==="function"],
-    ["Module 10 intent & action engine", Boolean(robotActionEngine)],
-    ["Module 11 planning & autonomy", Boolean(autonomousPlanner)],
-    ["Module 12 robot body connection", Boolean(robotConnectionManager)],
-    ["Module 13 motor safety watchdog", Boolean(motorSafetyWatchdog)],
+    ["Module 10 intent & action engine", Boolean(typeof robotActionEngine !== 'undefined' && robotActionEngine)],
+    ["Module 11 planning & autonomy", Boolean(typeof autonomousPlanner !== 'undefined' && autonomousPlanner)],
+    ["Module 12 robot body connection", Boolean(typeof robotConnectionManager !== 'undefined' && robotConnectionManager)],
+    ["Module 13 motor safety watchdog", Boolean(typeof motorSafetyWatchdog !== 'undefined' && motorSafetyWatchdog)],
     ["Persistent memory storage",typeof localStorage!=="undefined"],
     ["Memory identity UI",!!$("#memoryIdentity")],
     ["Perception fusion",typeof updatePerceptionFusion==="function"],
@@ -6366,6 +6450,10 @@ runDevChecks();
         if(switchBtn2){
           switchBtn2.textContent=cameraFacingMode==='environment'?'FRONT CAM':'REAR CAM';
         }
+        // Auto-open camera on the very first try when navigating to Camera
+        if(!cameraEnabled && !window.__roboCameraStarting){
+          toggleCamera().catch(err => log('CAM · auto-start notice · ' + (err?.name || '')));
+        }
       } else {
         screenCamera.classList.remove("active");
         screenCamera.setAttribute("aria-hidden", "true");
@@ -6423,6 +6511,9 @@ runDevChecks();
   if(screenCamSwitch2) screenCamSwitch2.addEventListener("click", () => switchCamera());
   const screenCamEnroll = $("#screenCameraEnrollBtn");
   if(screenCamEnroll) screenCamEnroll.addEventListener("click", () => enrollCurrentFace());
+  $("#cameraBox")?.addEventListener("click", () => {
+    if(!cameraEnabled && !window.__roboCameraStarting) toggleCamera().catch(err => log('CAM · tap open notice · ' + (err?.name || '')));
+  });
 $("#clearLogs")?.addEventListener("click",()=>{
   devLogLines=["[CLEARED] Log cleared by user."];
   devLogs.textContent=devLogLines[0];
@@ -7302,7 +7393,7 @@ function hookRecognitionDiagnostics(r){
 
   /* Developer convenience: desktop starts in portrait simulator. */
   const mq=window.matchMedia("(orientation: landscape)");
-  if(mq.matches && innerWidth>700) setOrientation(true);
+  if(mq.matches && (window.innerWidth||0)>700) setOrientation(true);
 })();
 </script>
 </body>
