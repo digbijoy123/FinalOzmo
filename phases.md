@@ -1,0 +1,103 @@
+# ROBO — Build Phases (UI Redesign Engagement)
+
+Follow in order. Do not start a phase until the previous one has been
+manually smoke-tested (see `.agent/rules/01-coding-standards.md` →
+Testing discipline). Each phase should end with a working, deployable
+state — never leave the app broken between phases.
+
+## Phase 0 — Baseline & scaffolding
+
+- Copy the current working build into `legacy/index.html` and
+  `legacy/api-robo.js` (read-only reference, do not edit these once
+  copied).
+- Create a working copy at `index.html` and `api/robo.js` that will
+  actually be modified from here on.
+- Confirm the working copy runs identically to legacy before changing
+  anything (deploy or run locally, do one voice round-trip, one camera
+  toggle, open the existing dev page).
+- Exit criteria: working copy behaves identically to `legacy/`, verified
+  manually.
+
+## Phase 1 — Introduce the 3-screen shell (no visual redesign yet)
+
+- Add a `currentScreen` state (`'face' | 'camera' | 'dev'`), default
+  `'face'`.
+- Wrap the existing HUD/avatar/caption/mic markup in a `Face` screen
+  section, the existing `#devPage` markup in a `Dev` screen section, and
+  create a new (initially empty/placeholder) `Camera` screen section.
+- Wire up the 3-button bar to switch `currentScreen` — at this point the
+  Face screen still looks like the old cluttered HUD; only the
+  navigation shell is new.
+- Exit criteria: tapping DEV/CAMERA/FACE switches full-screen sections
+  correctly, nothing else regressed (voice/camera/mic still work on
+  Face).
+
+## Phase 2 — Rebuild the Face screen per `design.md` §2
+
+- Strip the Face screen down to: black background, eyes + mouth only,
+  hidden-until-active caption, mic control, 3-button bar.
+- Remove HUD chips, camera popup, emoji sphere/orbit/aura/particles from
+  this screen (they move to Dev/Camera in later phases, not deleted from
+  the codebase yet if their logic is still needed elsewhere).
+- Rewrite the face rendering (`drawFace()` equivalent) to draw simple
+  eye/mouth shapes instead of the 3D emoji sphere, still driven by the
+  existing `stateData`/`setState`/`inferEmotion` state machine — reuse
+  the state machine untouched, only replace the drawing routine.
+- Verify: all 15 emotion states still visibly change the face; blinking
+  and idle auto-cycling still work; talking animation (mouth moves with
+  TTS) still works.
+- Exit criteria: Face screen matches `design.md` §2 layout at ~380px
+  width; emotion/voice pipeline unaffected.
+
+## Phase 3 — Build the Camera screen per `design.md` §4
+
+- Move the camera `<video>` element to full-screen within the Camera
+  screen section.
+- Move `faceTrackingOverlay` and `visionOverlay` rendering onto the
+  full-screen camera container, adjusting the coordinate-mapping math
+  (`mapVideoBoxToOverlay`, box-drawing in `renderVisionResult`) for the
+  new full-screen dimensions instead of the old small popup dimensions.
+- Add the `FACE` back-control and (optional) camera switch control on
+  this screen.
+- Verify: opening Camera screen starts the camera and face-tracking loop
+  (client-side, continuous); object-detection boxes still only appear
+  after an actual vision-triggering voice query, not continuously.
+- Exit criteria: Camera screen matches `design.md` §4; face-api.js
+  tracking and Gemini vision gating behave identically to before.
+
+## Phase 4 — Build the Dev screen per `design.md` §3
+
+- Confirm every diagnostic panel from the legacy `#devPage` is present
+  and functioning identically (voice pipeline, transcript, event log,
+  memory/identity, social awareness, perception fusion, system checks).
+- Relocate the emotion state test grid + AUTO IDLE toggle, the ESP32
+  connect control, and ENROLL FACE control into this screen.
+- Add the `FACE` back-control, consistent with Camera.
+- Exit criteria: nothing from the original dev tooling is missing;
+  relocated controls (emotion grid, ESP32 connect, enroll face) work
+  identically to before, just in a new location.
+
+## Phase 5 — Cleanup pass
+
+- Remove now-dead code paths only after confirming (via the Dev screen's
+  own diagnostics) that nothing still references them — e.g., the old
+  small camera popup container, the emoji sphere canvas layers, the old
+  6-button footer markup, HUD chip elements, if fully superseded.
+- Re-run the full manual smoke test: voice round-trip with a matching
+  face emotion, camera screen with face + object detection, dev screen
+  showing live diagnostics, all navigation working at ~380px and at a
+  wider desktop width.
+- Exit criteria: no dead/duplicate UI code remains; full smoke test
+  passes clean (no new console errors or `devLog(...'ERROR'...)` lines).
+
+## Phase 6 — (Deferred, not part of this engagement unless requested)
+
+Everything below is explicitly **out of scope** for the current UI
+redesign and should not be started without a new go-ahead:
+
+- Migration to Next.js/TypeScript/React/Tailwind.
+- Wiring the ESP32 WebSocket connection to real hardware and physical
+  motor reactions.
+- Continuous (always-on) vision perception.
+- Planning/autonomy (item 11 in `PRD.md`).
+- Any new paid API integration beyond Gemini + ElevenLabs already in use.
