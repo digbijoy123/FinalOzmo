@@ -289,8 +289,8 @@ button{font:inherit}
         <div class="status"><span class="dot live" id="stateDot"></span><span id="statusText">curious · standing by</span></div>
 
         <div class="caption" id="caption" aria-live="polite">
-          <div class="captionTitle">ROBO HEARS</div>
-          <span class="captionText" id="captionText">Tap the microphone and speak…</span>
+          <div class="captionTitle">MAX HEARS</div>
+          <span class="captionText" id="captionText">Say “Max” to talk or tap the mic…</span>
           <span class="bars"><i></i><i></i><i></i><i></i><i></i></span>
         </div>
 
@@ -303,7 +303,7 @@ button{font:inherit}
               <button class="navBtn active" id="navFaceBtn" data-screen="face">FACE</button>
             </nav>
           </div>
-          <button class="mic" id="micBtn" aria-label="Talk to Robo">
+          <button class="mic" id="micBtn" aria-label="Talk to Max">
             <svg viewBox="0 0 24 24" fill="none" stroke="#fff8f0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
               <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
@@ -3911,7 +3911,15 @@ button{font:inherit}
   }
 
   function showCaption(text, on=true){
-    captionText.textContent = text || "Listening…";
+    const titleEl = caption.querySelector(".captionTitle");
+    if(text && text.includes('\n')){
+      const parts = text.split('\n');
+      if(titleEl) titleEl.textContent = parts[0];
+      captionText.textContent = parts.slice(1).join('\n');
+    } else {
+      if(titleEl) titleEl.textContent = "MAX HEARS";
+      captionText.textContent = text || "Listening…";
+    }
     caption.classList.toggle("show", on);
   }
 
@@ -4833,30 +4841,28 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
      One explicit microphone gesture arms the background wake listener.
      Manual mic remains available as a deterministic fallback.
   */
-  const WAKE_PHRASE_RE=/\b(?:hey[\s,]+|ok[\s,]+|okay[\s,]+|hello[\s,]+|hi[\s,]+)?(?:ozmo|osmo|osmoe|ozmoe|ozma|asmo|cosmo|robo|robot|robu|rubo|roboai|roboaios)\b/i;
-  const WAKE_WORDS=['ozmo','osmo','osmoe','ozmoe','ozma','asmo','cosmo','ozon','robo','robot','robu','rubo','roboai','roboaios'];
+  const WAKE_PHRASE_RE=/\b(?:hey[\s,]+|ok[\s,]+|okay[\s,]+|hello[\s,]+|hi[\s,]+|yo[\s,]+)?(?:max|maxy|maxie|maks|macks|macs|mex|ozmo|osmo|cosmo|robo|robot)\b/i;
+  const WAKE_WORDS=['max','maxy','maxie','maks','macks','macs','mex','ozmo','osmo','cosmo','robo','robot','robu','rubo'];
 
   function normalizeWakeText(text){return String(text||'').toLowerCase().replace(/[^a-z0-9\s]/g,' ').replace(/\s+/g,' ').trim();}
 
   function wakeTokenLooksLikeWakeWord(token){
     const t=normalizeWakeText(token); if(!t) return false;
     if(WAKE_WORDS.includes(t)) return true;
-    if(t.length<3||t.length>7) return false;
-
-    // Levenshtein distance check against 'ozmo'
-    const a1='ozmo'; let p1=[0,1,2,3,4];
-    for(let i=1;i<=t.length;i++){const cur=[i];for(let j=1;j<=a1.length;j++)cur[j]=Math.min(cur[j-1]+1,p1[j]+1,p1[j-1]+(t[i-1]===a1[j-1]?0:1));p1=cur;}
-    if(p1[4]<=1) return true;
-
-    // Levenshtein distance check against 'osmo'
-    const a2='osmo'; let p2=[0,1,2,3,4];
-    for(let i=1;i<=t.length;i++){const cur=[i];for(let j=1;j<=a2.length;j++)cur[j]=Math.min(cur[j-1]+1,p2[j]+1,p2[j-1]+(t[i-1]===a2[j-1]?0:1));p2=cur;}
-    if(p2[4]<=1) return true;
-
-    // Levenshtein distance check against 'robo'
-    const a3='robo'; let p3=[0,1,2,3,4];
-    for(let i=1;i<=t.length;i++){const cur=[i];for(let j=1;j<=a3.length;j++)cur[j]=Math.min(cur[j-1]+1,p3[j]+1,p3[j-1]+(t[i-1]===a3[j-1]?0:1));p3=cur;}
-    return p3[4]<=1;
+    if(t==='max'||t==='maks'||t==='macks'||t==='maxy'||t==='maxie'||t==='mex'||t==='macs') return true;
+    if(t.length>=2 && t.length<=6){
+      // Levenshtein distance check against 'max'
+      const a0='max'; let p0=[0,1,2,3];
+      for(let i=1;i<=t.length;i++){const cur=[i];for(let j=1;j<=a0.length;j++)cur[j]=Math.min(cur[j-1]+1,p0[j]+1,p0[j-1]+(t[i-1]===a0[j-1]?0:1));p0=cur;}
+      if(p0[3]<=1) return true;
+    }
+    if(t.length>=3 && t.length<=7){
+      // Levenshtein distance check against 'ozmo' as backward-compatible fallback
+      const a1='ozmo'; let p1=[0,1,2,3,4];
+      for(let i=1;i<=t.length;i++){const cur=[i];for(let j=1;j<=a1.length;j++)cur[j]=Math.min(cur[j-1]+1,p1[j]+1,p1[j-1]+(t[i-1]===a1[j-1]?0:1));p1=cur;}
+      if(p1[4]<=1) return true;
+    }
+    return false;
   }
 
   const WAKE_COMMAND_WINDOW_MS=7000;
@@ -4875,6 +4881,12 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
   let wakeTranscriptBuffer="";
   let wakeTranscriptBufferAt=0;
 
+  // Active Multi-Turn Conversation Topic Mode
+  let conversationActive=false;
+  let conversationSilenceWatchdog=null;
+  const CONVERSATION_TIMEOUT_MS=10000;
+  const CONVERSATION_STOP_RE=/\b(?:stop|exit|quit|cancel|bye|goodbye|see you|sleep|go to sleep|shut up|quiet|silence|that's all|that is all|that's it|thats all|thank you|thanks|bas|alvida|done|khatam)\b/i;
+
   function wakeEvent(message,data=null){
     log('WAKE · '+message+(data ? ' · '+JSON.stringify(data) : ''));
   }
@@ -4883,14 +4895,18 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
     const clean=normalizeWakeText(text); if(!clean) return {woken:false,command:''};
     const tokens=clean.split(' '); let wakeIndex=-1;
     for(let i=0;i<tokens.length;i++){
-      if(['hey','hi','hello','ok','okay'].includes(tokens[i])) continue;
+      if(['hey','hi','hello','ok','okay','yo'].includes(tokens[i])) continue;
       if(wakeTokenLooksLikeWakeWord(tokens[i])){wakeIndex=i;break;}
     }
     if(wakeIndex<0) return {woken:false,command:''};
-    let command=tokens.slice(wakeIndex+1).join(' ').trim();
-    if(!command && wakeIndex>0){
-      command=tokens.slice(0,wakeIndex).filter(t=>!['hey','hi','hello','ok','okay'].includes(t)).join(' ').trim();
-    }
+
+    // Filter out wake token and any leading greeting/filler particles immediately preceding it
+    const commandTokens = tokens.filter((tok, idx) => {
+      if(idx === wakeIndex) return false;
+      if(idx < wakeIndex && ['hey','hi','hello','ok','okay','yo'].includes(tok)) return false;
+      return true;
+    });
+    const command = commandTokens.join(' ').trim();
     return {woken:true,command};
   }
 
@@ -4929,7 +4945,7 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
     wakeCommandArmed=false;
     wakeCommandStartedAt=0;
     wakeEvent('armed · '+reason);
-    setVoiceStatus('OZMO READY · say “Ozmo” to talk');
+    setVoiceStatus('MAX READY · say “Max” to talk');
     scheduleWakeEngineRestart(50);
     return true;
   }
@@ -4961,14 +4977,14 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
         wakeEvent('listener active');
         if(!listening && !talking){
           setVoiceStatus(wakeCommandArmed
-            ? 'OZMO ACTIVE · speak your command'
-            : 'OZMO ACTIVE · say “Ozmo”');
+            ? 'MAX ACTIVE · speak your command'
+            : 'MAX ACTIVE · say “Max”');
         }
       };
 
       r.onspeechstart=()=>{
         if(session!==wakeSession) return;
-        wakeEvent('speech heard · listening for Ozmo');
+        wakeEvent('speech heard · listening for Max');
       };
 
       r.onresult=(e)=>{
@@ -5000,24 +5016,26 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
             inlineCommand:Boolean(parsed.command)
           });
 
-          // Fast inline command execution (e.g. "Ozmo what is 2+2", "Ozmo dance")
+          // Fast inline command execution (e.g. "Max what is 2+2", "tell me a story Max")
           if(parsed.command){
             wakeCommandArmed=false;
             wakeCommandStartedAt=0;
+            conversationActive=true;
             stopWakeEngine('inline wake command');
-            setState('listening','Ozmo heard: ' + parsed.command);
-            showCaption('OZMO HEARS\n' + parsed.command, true);
+            setState('listening','Max heard: ' + parsed.command);
+            showCaption('MAX HEARS\n' + parsed.command, true);
             setTimeout(()=>respond(parsed.command), 40);
             return;
           }
 
-          // User said "Ozmo" without inline command:
+          // User said "Max" without inline command:
           // Perk up, alert eyes, and immediately start STT listener to capture question!
           stopWakeEngine('wake phrase');
           wakeCommandArmed=false;
           wakeCommandStartedAt=0;
-          setState('listening','Ozmo active · listening');
-          showCaption('OZMO ACTIVE\nListening to you…', true);
+          conversationActive=true;
+          setState('listening','Max active · listening');
+          showCaption('MAX ACTIVE\nListening to you…', true);
           setTimeout(()=>{
             startSTT(false);
           }, 60);
@@ -5103,6 +5121,31 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
       }
       return;
     }
+
+    // ACTIVE TOPIC CONTINUOUS CONVERSATION:
+    // Max remains actively listening for the user's follow-up on that topic!
+    if(conversationActive && !listening && !talking && !aiRequestInFlight){
+      setVoiceStatus('MAX LISTENING · speak your follow-up…');
+      setState('listening', 'Max listening on active topic…');
+      showCaption('MAX LISTENING\nListening to your follow-up…', true);
+      clearTimeout(conversationSilenceWatchdog);
+      conversationSilenceWatchdog = setTimeout(() => {
+        if(conversationActive && !listening && !talking && !aiRequestInFlight){
+          conversationActive = false;
+          setVoiceStatus('MAX READY · say “Max” to talk');
+          setState('curious', 'curious · standing by');
+          scheduleWakeEngineRestart(150);
+        }
+      }, CONVERSATION_TIMEOUT_MS);
+
+      setTimeout(() => {
+        if(conversationActive && !listening && !talking && !aiRequestInFlight){
+          startSTT(false);
+        }
+      }, 220);
+      return;
+    }
+
     if(wakeArmed && !listening && !talking && !aiRequestInFlight){
       wakeCommandArmed=false;
       wakeCommandStartedAt=0;
@@ -5195,7 +5238,7 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
       if(text){
         const first=changed[0]||{};
         sttEvent(first.final?'FINAL RESULT': 'INTERIM RESULT',text+' · confidence '+(first.confidence||0).toFixed(3));
-        showCaption('ROBO HEARS\n'+text,true);
+        showCaption('MAX HEARS\n'+text,true);
         if(devTranscript) devTranscript.textContent=text;
         if(devStage) devStage.textContent=first.final?'FINAL TRANSCRIPT RECEIVED':'INTERIM TRANSCRIPT RECEIVED';
       }
@@ -5259,6 +5302,14 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
         }
       }
       sttRetryUsed=false;
+      if(!sttHadResult && conversationActive && !aiRequestInFlight && !talking){
+        conversationActive=false;
+        clearTimeout(conversationSilenceWatchdog);
+        setVoiceStatus('MAX READY · say “Max” to talk');
+        if(state==='listening') setState('curious','curious · standing by');
+        if(wakeArmed) scheduleWakeEngineRestart(300);
+        return;
+      }
       if(!talking && state==='listening') setState('curious','curious · standing by');
       if(wakeArmed && !talking && !aiRequestInFlight) scheduleWakeEngineRestart(450);
     };
@@ -5417,15 +5468,15 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
     if(!l) return "I didn't catch that, but I'm all ears!";
     if(/\b(hi|hello|hey|greetings|howdy)\b/.test(l)){
       const p = [
-        "Hey there! Ozmo in the house! What adventure are we starting today?",
-        "Beep boop! Hello human friend! Ready to roll!",
+        "Hey there! Max in the house! What adventure are we starting today?",
+        "Beep boop! Hello human friend! Max is ready to roll!",
         "Hey! Great to hear your voice. What's the mission?"
       ];
       return p[Math.floor(Math.random()*p.length)];
     }
     if(/how are you/.test(l)) return "I'm fully charged, running on 100% digital enthusiasm, and ready for action!";
     if(/can you hear me/.test(l)) return "Loud and clear! My audio sensors are in tip-top shape.";
-    if(/who are you|what are you|your name/.test(l)) return "I'm Ozmo! Your pint-sized robotic companion, sidekick, and assistant in chief!";
+    if(/who are you|what are you|your name/.test(l)) return "I'm Max! Your pint-sized robotic companion, sidekick, and assistant in chief!";
     if(/who made you|who created you/.test(l)) return "Digbijoy created me with lots of code, robotics magic, and pure willpower!";
     if(/joke|funny/.test(l)){
       const jokes = [
@@ -6022,6 +6073,29 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
       return;
     }
 
+    // Check for explicit conversation conclusion commands
+    const isStopCommand = CONVERSATION_STOP_RE.test(clean) && clean.split(' ').length <= 5;
+    if(conversationActive && isStopCommand){
+      conversationActive = false;
+      clearTimeout(conversationSilenceWatchdog);
+      const signoffs = [
+        "Got it! Standing by whenever you need me.",
+        "Catch you later! Just say Max if you need anything.",
+        "Understood! Going into standby.",
+        "Anytime! I'm right here if you need me."
+      ];
+      const signoff = signoffs[Math.floor(Math.random() * signoffs.length)];
+      setState('happy', 'conversation ended · standby');
+      showCaption('MAX\n' + signoff, true);
+      setVoiceStatus('MAX READY · say “Max” to talk');
+      speak(signoff, detectConversationLanguage(clean));
+      return;
+    }
+
+    // Activate/refresh continuous conversational topic mode
+    conversationActive = true;
+    clearTimeout(conversationSilenceWatchdog);
+
     const memoryCommand=await handleMemoryCommand(clean);
     if(memoryCommand?.handled){
       devLog('MEMORY','handled explicit memory command',{reply:memoryCommand.reply});
@@ -6029,7 +6103,7 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
         intensity:.7,
         confidence:.95
       });
-      showCaption('ROBO SAYS\n'+memoryCommand.reply,true);
+      showCaption('MAX SAYS\n'+memoryCommand.reply,true);
       speak(memoryCommand.reply,detectConversationLanguage(clean));
       return;
     }
@@ -6038,7 +6112,7 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
     if(actionCommand?.handled){
       devLog('ACTION', 'handled voice motion intent', { type: actionCommand.type, reply: actionCommand.reply });
       setState(actionCommand.emotion || 'excited', 'action · ' + actionCommand.type);
-      showCaption('ROBO ACTS\n' + actionCommand.reply, true);
+      showCaption('MAX ACTS\n' + actionCommand.reply, true);
       speak(actionCommand.reply, detectConversationLanguage(clean));
       return;
     }
@@ -6057,8 +6131,8 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
     aiRequestInFlight=true;
     if(devAI) devAI.textContent='CONNECTING · PROVIDER ADAPTER';
     if(devStage) devStage.textContent='AI REQUEST ACTIVE';
-    setVoiceStatus('ROBO THINKING · contacting AI brain…');
-    setState('thinking','thinking · Robo is processing',{behavioral:true});
+    setVoiceStatus('MAX THINKING · contacting AI brain…');
+    setState('thinking','thinking · Max is processing',{behavioral:true});
 
     const requestCameraSession=cameraSession;
     let requestUsedVision=false;
