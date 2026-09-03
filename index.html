@@ -340,7 +340,6 @@ button{font:inherit}
         <div class="cameraControlsBar">
           <button class="camControlBtn" id="screenCameraToggleBtn">START CAMERA</button>
           <button class="camControlBtn" id="screenCameraSwitchBtn2">FLIP CAM</button>
-          <button class="camControlBtn" id="screenCameraEnrollBtn">ENROLL FACE</button>
           <button class="camControlBtn highlight" data-screen="face">RETURN TO FACE</button>
         </div>
       </section>
@@ -360,7 +359,6 @@ button{font:inherit}
                 <div class="devActions" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:0;">
                   <button class="devAction" id="bleBtn">CONNECT ROBOT (BLE)</button>
                   <button class="devAction" id="autoStateBtn">AUTO IDLE: ON</button>
-                  <button class="devAction" id="enrollFaceBtn">ENROLL FACE</button>
                   <button class="devAction" id="orientationBtn">LANDSCAPE TEST</button>
                 </div>
               </div>
@@ -609,6 +607,7 @@ button{font:inherit}
   let faceRecognitionDistance = null;
   let faceRecognitionIdentity = null;
   let faceRecognitionStatus = 'not-enrolled';
+  let pendingVoiceFaceEnrollment = null;
   let faceLastRecognitionAt = 0;
   let faceRecognitionInFlight = false;
   let faceRecognitionMatchDiagnostics = null;
@@ -1840,6 +1839,16 @@ button{font:inherit}
 
         if(!live) continue;
 
+        if(pendingVoiceFaceEnrollment && Date.now() < pendingVoiceFaceEnrollment.expiresAt && detection?.descriptor){
+          const pending=pendingVoiceFaceEnrollment;
+          pendingVoiceFaceEnrollment=null;
+          rememberCurrentFaceAs(pending.name, pending.relation).then(res=>{
+            if(res && res.ok){
+              speak(`Got it! I see you now, ${res.person.displayName}! Your face is saved in my long-term memory!`, 'en');
+            }
+          });
+        }
+
         const match=findFaceMatch(detection.descriptor);
 
         if(!match) continue;
@@ -2346,26 +2355,7 @@ button{font:inherit}
   }
 
   async function identifyOrCreatePerson(name, relation=''){
-    const cleanName=normalizeMemoryText(name).replace(/[.?!]+$/,'').trim();
-    if(!cleanName || !roboMemory) return {ok:false,reason:'invalid-name'};
-    ensureMemoryRegistry();
-    const descriptor=await captureCurrentFaceDescriptor().catch(()=>null);
-    if(!descriptor) return {ok:false,reason:'no-face'};
-    const existing=findPersonByName(cleanName);
-    if(existing){
-      if(!Array.isArray(existing.faceProfiles)) existing.faceProfiles=[];
-      if(!existing.faceProfiles.some(fp=>faceDistance(descriptor,fp.descriptor)<0.46)) existing.faceProfiles.push(descriptorFaceProfile(existing,descriptor));
-      if(relation) existing.relationship=normalizeMemoryText(relation);
-      setActivePerson(existing.personId,'identity-confirmed'); savePersonProfile(existing,'identity-confirmed');
-      faceRecognitionIdentity=existing.displayName; faceRecognitionStatus='recognized'; faceDiag(); renderFaceTarget(); updatePerceptionFusion('identity-confirmed');
-      return {ok:true,person:existing,created:false};
-    }
-    const person={personId:'person-'+Date.now()+'-'+Math.random().toString(36).slice(2,8),displayName:cleanName,aliases:[],relationship:relation||'',facts:[],preferences:{},memories:[],faceProfiles:[descriptorFaceProfile(null,descriptor)],createdAt:Date.now(),updatedAt:Date.now()};
-    person.facts.push({key:'name',value:cleanName,source:'identity',personId:person.personId,createdAt:Date.now(),updatedAt:Date.now()});
-    person.faceProfiles[0].personId=person.personId;
-    roboMemory.persons.push(person); setActivePerson(person.personId,'new-person-created'); saveRoboMemory('new-person-created');
-    faceRecognitionIdentity=cleanName; faceRecognitionStatus='recognized'; faceDiag(); renderMemoryDiagnostics(); renderFaceTarget(); updatePerceptionFusion('identity-created');
-    return {ok:true,person,created:true};
+    return await rememberCurrentFaceAs(name, relation);
   }
 
   function syncLiveIdentityAndSocial(reason='live-sync'){
@@ -3609,11 +3599,40 @@ button{font:inherit}
     if(!cleanName || !roboMemory) return {ok:false,reason:'invalid-name'};
     ensureMemoryRegistry();
 
-    const descriptor=await captureCurrentFaceDescriptor().catch(()=>null);
-    if(!descriptor){
-      return {ok:false,reason:'no-face'};
+    // 1. Auto-activate camera if it's not currently running
+    if(!cameraEnabled || !cameraStream || !camera.videoWidth){
+      try{
+        setVoiceStatus('CAMERA ACTIVATING · memorizing ' + cleanName);
+        showCaption(`LOOK AT CAMERA\nMemorizing ${cleanName}…`, true);
+        await startCamera(cameraFacingMode || 'user');
+        await new Promise(res => setTimeout(res, 650));
+      }catch(e){
+        log('AUTO CAM START FAILED · ' + (e?.message || ''));
+      }
     }
 
+    // 2. Sample face descriptor with progressive retries
+    let descriptor=await captureCurrentFaceDescriptor().catch(()=>null);
+    if(!descriptor && cameraEnabled){
+      for(let attempt=0; attempt<3 && !descriptor; attempt++){
+        await new Promise(res => setTimeout(res, 350));
+        descriptor=await captureCurrentFaceDescriptor().catch(()=>null);
+      }
+    }
+
+    if(!descriptor){
+      // Arm a 7-second auto-enroll watcher: as soon as a face appears, snapshot & memorize!
+      pendingVoiceFaceEnrollment = {
+        name: cleanName,
+        relation: relation,
+        expiresAt: Date.now() + 7000
+      };
+      return {ok:false,reason:'no-face',name:cleanName};
+    }
+
+    pendingVoiceFaceEnrollment = null;
+
+    // 3. Multi-Person Registry: look up existing person or create new persistent profile
     let person=findPersonByName(cleanName);
     const wasExisting=Boolean(person);
     const now=Date.now();
@@ -3638,15 +3657,14 @@ button{font:inherit}
 
     if(!Array.isArray(person.faceProfiles)) person.faceProfiles=[];
 
-    // Store the current face descriptor. Keep a small set of samples so
-    // recognition is more tolerant of mobile-camera angle/lighting changes.
-    const duplicate=person.faceProfiles.some(fp=>faceDistance(descriptor,fp?.descriptor)<0.42);
+    // Multi-angle sample storage: up to 8 distinct angles/lighting conditions
+    const duplicate=person.faceProfiles.some(fp=>faceDistance(descriptor,fp?.descriptor)<0.36);
     if(!duplicate){
       const enrolled=descriptorFaceProfile(person,descriptor);
       enrolled.explicitEnrollment=true;
       enrolled.enrollmentSource='voice-command';
       person.faceProfiles.unshift(enrolled);
-      if(person.faceProfiles.length>6) person.faceProfiles=person.faceProfiles.slice(0,6);
+      if(person.faceProfiles.length>8) person.faceProfiles=person.faceProfiles.slice(0,8);
     }
 
     person.facts=Array.isArray(person.facts)?person.facts:[];
@@ -3654,21 +3672,24 @@ button{font:inherit}
     person.facts.unshift({
       key:'name',
       value:cleanName,
-      source:'identity',
+      source:'voice-face-identity',
       personId:person.personId,
       createdAt:now,
       updatedAt:now
     });
     person.updatedAt=now;
 
+    // Persist in localStorage long-term memory
     setActivePerson(person.personId,'voice-face-identity');
     savePersonProfile(person,'voice-face-identity');
+    saveRoboMemory('voice-face-identity');
 
     faceRecognitionIdentity=person.displayName;
     faceRecognitionStatus='recognized';
     faceRecognitionDistance=0;
     lastKnownPersonId=person.personId;
     lastKnownPersonAt=now;
+
     if(faceTarget){
       faceTarget.identity=person.displayName;
       faceTarget.personId=person.personId;
@@ -3702,42 +3723,29 @@ button{font:inherit}
     deriveLiveSocialFromFaces(faceDetections);
     updatePerceptionFusion('voice-face-identity');
 
-    devLog('IDENTITY','voice face memory bound',{
+    // Cozmo celebratory perk & nod
+    setState('happy', `memorized · ${cleanName}`);
+    if(typeof autonomousPlanner !== 'undefined' && autonomousPlanner?.action){
+      autonomousPlanner.action.nod();
+    }
+    showCaption(`FACE MEMORIZED\n${cleanName}`, true);
+
+    devLog('IDENTITY','voice face memorized to long-term memory',{
       name:person.displayName,
       personId:person.personId,
       profiles:person.faceProfiles.length,
-      totalPeople:roboMemory.persons.length
+      totalRegisteredPeople:roboMemory.persons.length
     });
 
     return {ok:true,person,created:!wasExisting};
   }
 
-  async function enrollCurrentFace(){
-    const active=getActivePerson();
-    const name=active?.displayName || roboMemory?.identity?.displayName || '';
-    if(!name){
-      showCaption('Tell Robo your name first, for example: remember me as Max.',true);
-      hideCaption(3000);
-      return {ok:false,reason:'no-name'};
-    }
-    const result=await rememberCurrentFaceAs(name);
-    if(result.ok){
-      faceBadge('FACE ENROLLED · '+result.person.displayName);
-      showCaption('Face enrolled for '+result.person.displayName+'.',true);
-      hideCaption(2200);
-    }else{
-      showCaption('Face enrollment needs your face clearly visible.',true);
-      hideCaption(2500);
-    }
-    return result;
-  }
-
   async function handleMemoryCommand(text){
-    const raw=normalizeMemoryText(text), l=raw.toLowerCase();
+    const raw=normalizeMemoryText(text), l=raw.toLowerCase().trim();
     if(!raw || !roboMemory) return null;
     ensureMemoryRegistry();
 
-    if(/^(what do you remember|what do you know about me|what do you remember about me|show my memory|show me what you remember)$/.test(l)){
+    if(/^(what do you remember|what do you know about me|what do you remember about me|show my memory|show me what you remember|who do you remember|who do you know)$/.test(l)){
       return {handled:true,reply:getMemorySummary(),emotion:'happy'};
     }
 
@@ -3751,48 +3759,53 @@ button{font:inherit}
       return {handled:true,reply:personSummary(person),emotion:person?'happy':'confused'};
     }
 
-    if(/^(forget everything|forget all memories|forget all the (?:profiles?|people?|identities?) (?:you )?(?:remember|remembered)|forget all the (?:profile )?(?:ids?|id['’]?s)(?:\s+(?:is|are))?(?:\s+you)?\s+(?:remember|remembered)|clear all memory|clear all memories|erase all memory|erase all memories|delete all memories|delete all profiles|reset all memory|reset memory)$/.test(l)){
+    if(/^(forget everything|forget all memories|forget all the (?:profiles?|people?|identities?) (?:you )?(?:remember|remembered)|clear all memory|clear all memories|erase all memory|erase all memories|delete all memories|delete all profiles|reset all memory|reset memory)$/.test(l)){
       clearAllRoboMemory();
       return {handled:true,reply:'I cleared my persistent multi-person memory.',emotion:'neutral'};
     }
 
-    const directSaveFace=raw.match(/^save\s+(?:my\s+)?face\s+(?:as|under\s+the\s+name)\s+([A-Za-z][A-Za-z .'-]{1,40})[.!?]?$/i);
-    if(directSaveFace){
-      const result=await rememberCurrentFaceAs(directSaveFace[1]).catch(()=>({ok:false,reason:'error'}));
-      if(!result.ok){
-        return {handled:true,reply:result.reason==='no-face'?'I need your face clearly visible in the camera first.':'I could not save that face yet.',emotion:'confused'};
+    // 1. Spoken Name & Face Memorization (English, Hindi, Bengali)
+    // Matches: "My name is X", "I am X", "Remember me as X", "Remember my face as X", "Save my face as X", "Call me X"
+    // Matches: "Mera naam X hai", "Mujhe X bulao", "Amar naam X"
+    const voiceIdentityMatch = raw.match(/^(?:my name is|i am|i'm|call me|you can call me|remember me as|save my face as|save face as|remember my face as|memorize my face as|remember that my name is|mera naam|amar naam)\s+([A-Za-z][A-Za-z .'-]{1,40})(?:\s+(?:hai|in memory|to memory))?[.!?]?$/i);
+    if(voiceIdentityMatch){
+      const targetName=voiceIdentityMatch[1].trim();
+      const result=await rememberCurrentFaceAs(targetName).catch(()=>({ok:false,reason:'error'}));
+      if(result.ok){
+        return {
+          handled:true,
+          reply:`Nice to meet you, ${result.person.displayName}! My camera memorized your face and saved your profile into my long-term memory. I'll always recognize you!`,
+          emotion:'happy'
+        };
       }
-      return {handled:true,reply:`Done. I saved this face as ${result.person.displayName} and linked it to memory.`,emotion:'happy'};
+      return {
+        handled:true,
+        reply:`I've turned on my camera, ${targetName}! Look right at my lens for a second so I can memorize your face!`,
+        emotion:'curious'
+      };
     }
 
-    const flexibleName=raw.match(/^(?:my name is|remember me as|remember my name as|save my name as|remember that my name is|i am|i'm)\s+([A-Za-z][A-Za-z .'-]{1,40})(?:\s+(?:in|to)\s+(?:your\s+)?memory)?[.!?]?$/i);
-    if(flexibleName){
-      const result=await rememberCurrentFaceAs(flexibleName[1]).catch(()=>({ok:false,reason:'error'}));
-      if(!result.ok) return {handled:true,reply:result.reason==='no-face'?'I need your face clearly visible in the camera first.':'I could not save that identity yet.',emotion:'confused'};
-      return {handled:true,reply:`Got it. I am ${result.person.displayName}. I saved your face and identity to memory.`,emotion:'happy'};
-    }
-    const primaryMemorySentence=raw.match(/^(?:i am|i'm)\s+(?:your\s+)?primary\s+user(?:[,.]?\s+)(?:save|remember)\s+(?:my\s+name\s+is|me\s+as|my\s+name\s+as)\s+([A-Za-z][A-Za-z .'-]{1,40})(?:\s+(?:in|to)\s+(?:your\s+)?memory)?[.!?]?$/i);
-    if(primaryMemorySentence){
-      const result=await rememberCurrentFaceAs(primaryMemorySentence[1]).catch(()=>({ok:false,reason:'error'}));
-      if(!result.ok) return {handled:true,reply:result.reason==='no-face'?'I need your face clearly visible in the camera first.':'I could not save that identity yet.',emotion:'confused'};
-      return {handled:true,reply:`Understood. I saved ${result.person.displayName} as my primary user and linked the current face.`,emotion:'happy'};
-    }
-    const directFaceName=raw.match(/^remember\s+(?:this\s+face|this\s+person)\s+(?:is|as)\s+([A-Za-z][A-Za-z .'-]{1,40})[.!?]?$/i);
-    if(directFaceName){
-      const result=await rememberCurrentFaceAs(directFaceName[1]).catch(()=>({ok:false,reason:'error'}));
-      if(!result.ok){
-        return {handled:true,reply:result.reason==='no-face'?'I need the person\'s face visible in the camera first.':'I could not save that face yet.',emotion:'confused'};
+    // 2. Third-person or Introduced Person Memorization:
+    // Matches: "This is Sarah", "Meet Alex", "His name is John", "Her name is Emma", "This person is David"
+    const introducedMatch = raw.match(/^(?:this is|meet|his name is|her name is|their name is|this person is|remember this person as|remember this face as|add this person as|save this person as)\s+([A-Za-z][A-Za-z .\'-]{1,40})(?:\s+and\s+(?:he|she|they)\s+is\s+my\s+(.+))?[.!?]?$/i);
+    if(introducedMatch){
+      const friendName=introducedMatch[1].trim();
+      const friendRelation=introducedMatch[2] ? introducedMatch[2].trim() : '';
+      const result=await rememberCurrentFaceAs(friendName, friendRelation).catch(()=>({ok:false,reason:'error'}));
+      if(result.ok){
+        return {
+          handled:true,
+          reply:result.created
+            ? `Great to meet you, ${result.person.displayName}! I've saved your face into my long-term memory as a registered person!`
+            : `Welcome back, ${result.person.displayName}! I've updated your face profile in my long-term memory!`,
+          emotion:'happy'
+        };
       }
-      return {handled:true,reply:`I remember ${result.person.displayName}. I linked this live face to their profile.`,emotion:'happy'};
-    }
-
-    const introduced=raw.match(/^(?:this is|this person is|this face is|remember this person as|remember this face as|add this person as|save this person as|his name is|her name is|their name is)\s+([A-Za-z][A-Za-z .\'-]{1,40})(?:\s+and\s+(?:he|she|they)\s+is\s+my\s+(.+))?[.!?]?$/i);
-    if(introduced){
-      const result=await identifyOrCreatePerson(introduced[1],introduced[2]||'');
-      if(!result.ok){
-        return {handled:true,reply:'I can add that person, but I need their face clearly visible in the camera first.',emotion:'confused'};
-      }
-      return {handled:true,reply:result.created?`Got it. This is ${result.person.displayName}. I created a separate memory and identity profile for them.`:`I remember ${result.person.displayName}. I updated their identity profile.` ,emotion:'happy'};
+      return {
+        handled:true,
+        reply:`I've got the camera on! Have ${friendName} look right at my lens so I can memorize their face!`,
+        emotion:'curious'
+      };
     }
 
     const forgetName=/^(?:forget my name|delete my name|remove my name from memory)$/i.test(raw);
@@ -3801,23 +3814,6 @@ button{font:inherit}
       const had=Boolean(primary?.displayName);
       if(primary){primary.displayName='';primary.facts=primary.facts.filter(f=>String(f.key).toLowerCase()!=='name');saveRoboMemory('identity-forgotten');}
       return {handled:true,reply:had?'Okay. I forgot your name.':'I do not currently have your name stored.',emotion:'neutral'};
-    }
-
-    const rememberMeAs=raw.match(/^remember\s+me\s+as\s+([A-Za-z][A-Za-z .\'-]{1,40})[.!?]?$/i);
-    if(rememberMeAs){
-      const result=await rememberCurrentFaceAs(rememberMeAs[1]);
-      if(result.ok){
-        return {handled:true,reply:result.created?`Got it. I am ${result.person.displayName}. I saved my face and created a persistent identity profile.`:`Got it. I am ${result.person.displayName}. I updated my face profile and memory.`,emotion:'happy'};
-      }
-      return {handled:true,reply:'I can remember that name, but I need your face clearly visible in the camera first.',emotion:'confused'};
-    }
-
-    const rememberedName=raw.match(/^remember(?: that)?\s+(?:my name is|i am|i\'m)\s+([A-Za-z][A-Za-z .\'-]{1,40})[.!?]?$/i);
-    if(rememberedName){
-      const result=await rememberCurrentFaceAs(rememberedName[1]);
-      if(result.ok) return {handled:true,reply:`I will remember you as ${result.person.displayName} and store this face with your identity.`,emotion:'happy'};
-      const value=rememberedName[1].trim();
-      if(setIdentityName(value)) return {handled:true,reply:`I will remember your name as ${value}.`,emotion:'happy'};
     }
 
     const forget=l.match(/^(?:forget|remove from memory|delete from memory)\s+(.+)$/);
@@ -6663,8 +6659,6 @@ runDevChecks();
   if(screenCamSwitch) screenCamSwitch.addEventListener("click", () => switchCamera());
   const screenCamSwitch2 = $("#screenCameraSwitchBtn2");
   if(screenCamSwitch2) screenCamSwitch2.addEventListener("click", () => switchCamera());
-  const screenCamEnroll = $("#screenCameraEnrollBtn");
-  if(screenCamEnroll) screenCamEnroll.addEventListener("click", () => enrollCurrentFace());
   $("#cameraBox")?.addEventListener("click", () => {
     if(!cameraEnabled && !window.__roboCameraStarting) toggleCamera().catch(err => log('CAM · tap open notice · ' + (err?.name || '')));
   });
@@ -6776,7 +6770,6 @@ function hookRecognitionDiagnostics(r){
     stateGrid.appendChild(b);
   });
   $("#devBtn")?.addEventListener("click",()=>$("#devPanel")?.classList.toggle("open"));
-  $("#enrollFaceBtn")?.addEventListener("click",()=>enrollCurrentFace());
   $("#closeDev")?.addEventListener("click",()=>$("#devPanel")?.classList.remove("open"));
   $("#autoStateBtn")?.addEventListener("click",()=>setAutoIdle(!autoIdleEnabled));
 
