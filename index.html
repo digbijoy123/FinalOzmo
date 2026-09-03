@@ -4895,6 +4895,9 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
   const WAKE_WORDS = ['max','maxy','maxie','maks','macks','macs','mex','matts','ozmo','osmo','cosmo','robo','robot'];
   const CONVERSATION_STOP_RE = /\b(?:stop|exit|quit|cancel|bye|goodbye|see you|sleep|go to sleep|shut up|quiet|silence|that's all|that is all|that's it|thats all|thank you|thanks|bas|alvida|done|khatam)\b/i;
 
+  let conversationActive = false;
+  let conversationSilenceWatchdog = null;
+
   class UnifiedVoiceEngine {
     constructor() {
       this.mode = VoiceMode.STANDBY_WAKE;
@@ -4906,6 +4909,7 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
       this.restartTimer = null;
       this.silenceTimer = null;
       this.conversationTimeoutTimer = null;
+      this.thinkingTimeoutTimer = null;
       this.lastSpeechAt = 0;
       this.lastSpokenEndedAt = 0;
       this.CONVERSATION_WINDOW_MS = 10000;
@@ -5090,14 +5094,22 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
           this.setMode(VoiceMode.THINKING);
           setState('listening', 'Max heard: ' + parsed.command);
           showCaption('MAX HEARS\n' + parsed.command, true);
-          setTimeout(() => respond(parsed.command), 40);
+          setTimeout(() => respond(parsed.command).catch(err => log('RESPOND ERROR · ' + (err?.message || err))), 40);
           return;
         }
 
-        this.setMode(VoiceMode.ACTIVE_LISTENING);
-        setState('listening', 'Max active · listening');
-        showCaption('MAX ACTIVE\nListening to you…', true);
+        // Spoke wake word ("Max" / "Hey Max") without command: acknowledge verbally!
+        const ackResponses = [
+          "Yes? I'm listening!",
+          "Hey! What can I do for you?",
+          "I'm here! What's on your mind?",
+          "Listening!"
+        ];
+        const ack = ackResponses[Math.floor(Math.random() * ackResponses.length)];
+        setState('happy', 'Max acknowledged wake word');
+        showCaption('MAX\n' + ack, true);
         setVoiceStatus('MAX LISTENING · speak your command…');
+        speak(ack, 'en');
         return;
       }
 
@@ -5113,7 +5125,7 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
           const query = finalText;
           this.setMode(VoiceMode.THINKING);
           setState('thinking', 'thinking · processing your words');
-          setTimeout(() => respond(query), 120);
+          setTimeout(() => respond(query).catch(err => log('RESPOND ERROR · ' + (err?.message || err))), 120);
           return;
         }
 
@@ -5123,7 +5135,7 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
             log('VOICE · silence pause detected · dispatching buffered utterance');
             this.setMode(VoiceMode.THINKING);
             setState('thinking', 'thinking · processing your words');
-            respond(spoken);
+            respond(spoken).catch(err => log('RESPOND ERROR · ' + (err?.message || err)));
           }
         }, 1400);
       }
@@ -5175,6 +5187,20 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
       log('VOICE · mode changed to ' + newMode);
       clearTimeout(this.silenceTimer);
       clearTimeout(this.conversationTimeoutTimer);
+      clearTimeout(this.thinkingTimeoutTimer);
+
+      if (newMode === VoiceMode.THINKING) {
+        // Watchdog: prevent getting permanently stuck in THINKING
+        this.thinkingTimeoutTimer = setTimeout(() => {
+          if (this.mode === VoiceMode.THINKING) {
+            log('VOICE · thinking watchdog timeout · recovering to standby');
+            aiRequestInFlight = false;
+            this.setMode(VoiceMode.STANDBY_WAKE);
+            setState('curious', 'recovered from thinking timeout');
+            setVoiceStatus('MAX READY · say “Max” to talk');
+          }
+        }, 12000);
+      }
 
       if (newMode === VoiceMode.ACTIVE_CONVERSATION) {
         this.conversationTimeoutTimer = setTimeout(() => {
@@ -5207,6 +5233,7 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
     }
 
     triggerManualListening() {
+      aiRequestInFlight = false;
       this.arm('manual mic click');
       this.setMode(VoiceMode.ACTIVE_LISTENING);
       setState('listening', 'Max listening · capturing speech');
@@ -5974,17 +6001,20 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
       return;
     }
 
-    // Check for explicit conversation conclusion commands
-    const isStopCommand = CONVERSATION_STOP_RE.test(clean) && clean.split(' ').length <= 5;
-    if(conversationActive && isStopCommand){
-      conversationActive = false;
-      clearTimeout(conversationSilenceWatchdog);
-      const signoffs = [
-        "Got it! Standing by whenever you need me.",
-        "Catch you later! Just say Max if you need anything.",
-        "Understood! Going into standby.",
-        "Anytime! I'm right here if you need me."
-      ];
+    try {
+      // Check for explicit conversation conclusion commands
+      const isStopCommand = CONVERSATION_STOP_RE.test(clean) && clean.split(' ').length <= 5;
+      const inActiveConv = Boolean(conversationActive || (typeof voiceEngine !== 'undefined' && voiceEngine && (voiceEngine.mode === VoiceMode.ACTIVE_CONVERSATION || voiceEngine.mode === VoiceMode.ACTIVE_LISTENING)));
+      if(inActiveConv && isStopCommand){
+        conversationActive = false;
+        clearTimeout(conversationSilenceWatchdog);
+        if(typeof voiceEngine !== 'undefined' && voiceEngine) voiceEngine.setMode(VoiceMode.STANDBY_WAKE);
+        const signoffs = [
+          "Got it! Standing by whenever you need me.",
+          "Catch you later! Just say Max if you need anything.",
+          "Understood! Going into standby.",
+          "Anytime! I'm right here if you need me."
+        ];
       const signoff = signoffs[Math.floor(Math.random() * signoffs.length)];
       setState('happy', 'conversation ended · standby');
       showCaption('MAX\n' + signoff, true);
@@ -6196,6 +6226,17 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
       visionRequestController=null;
       aiRequestInFlight=false;
       if(wakeArmed && !talking && !listening) scheduleWakeEngineRestart(250);
+    }
+    }catch(outerFatalErr){
+      console.error('respond fatal error:', outerFatalErr);
+      devLog('BRAIN ERROR', outerFatalErr?.message || String(outerFatalErr));
+      aiRequestInFlight = false;
+      if(typeof voiceEngine !== 'undefined' && voiceEngine){
+        voiceEngine.setMode(VoiceMode.STANDBY_WAKE);
+        voiceEngine.scheduleRestart(300);
+      }
+      setState('curious', 'recovered from brain error');
+      setVoiceStatus('MAX READY · say “Max” to talk');
     }
   }
 
