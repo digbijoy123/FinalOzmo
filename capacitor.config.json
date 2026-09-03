@@ -1,0 +1,19 @@
+{
+  "appId": "com.robo.max",
+  "appName": "Max Robot",
+  "webDir": "www",
+  "server": {
+    "url": "https://final-ozmo.vercel.app",
+    "cleartext": true
+  },
+  "android": {
+    "allowMixedContent": true,
+    "captureInput": true,
+    "webContentsDebuggingEnabled": true
+  },
+  "plugins": {
+    "KeepAwake": {
+      "autoKeepAwake": true
+    }
+  }
+}

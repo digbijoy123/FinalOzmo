@@ -1,0 +1,27 @@
+{
+  "name": "final-ozmo",
+  "version": "2.95.0",
+  "description": "Max - Anki Cozmo-inspired Companion Robot AIOS",
+  "main": "index.html",
+  "scripts": {
+    "cap:sync": "cap sync android",
+    "cap:open": "cap open android"
+  },
+  "dependencies": {
+    "@capacitor/core": "^8.5.1",
+    "@capacitor/android": "^8.5.1",
+    "@capacitor-community/keep-awake": "^8.0.1"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.5.1"
+  },
+  "keywords": [
+    "robotics",
+    "cozmo",
+    "gemini-live",
+    "ai",
+    "face-tracking"
+  ],
+  "author": "digbijoy123",
+  "license": "MIT"
+}
