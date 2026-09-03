@@ -3820,6 +3820,7 @@ button{font:inherit}
   let lastActivity = performance.now();
   let blink = 0;
   let blinkTimer = 1800 + Math.random()*3000;
+  let isDoubleBlink = false;
   let t = 0;
 
   const SERVICE_UUID = "0000ffe0-0000-1000-8000-00805f9b34fb";
@@ -3960,7 +3961,7 @@ button{font:inherit}
     ctx.closePath();
   }
 
-  function drawDomeEye(ctx, ex, ey_center, ew, eh, cr, browSlant, isHappy, side) {
+  function drawDomeEye(ctx, ex, ey_center, ew, eh, cr, browSlant, happyBlend, side) {
     ctx.save();
     ctx.translate(ex, ey_center);
 
@@ -3976,12 +3977,18 @@ button{font:inherit}
     if (eh <= ew * 0.22) {
       // Blinking / slit state: smooth rounded capsule
       drawRoundedRect(ctx, -halfW, -halfH, ew, eh, eh / 2);
-    } else if (isHappy) {
-      // Happy smiling eye: inverted arched smile
+    } else if (happyBlend > 0.02) {
+      // Smooth morph between dome eye and arched smiling crescent!
+      const h = Math.min(1, Math.max(0, happyBlend));
       const archH = halfH * 1.05;
-      ctx.moveTo(-halfW, halfH * 0.35);
-      ctx.quadraticCurveTo(0, -archH, halfW, halfH * 0.35);
-      ctx.quadraticCurveTo(0, -archH * 0.3, -halfW, halfH * 0.35);
+
+      const topArchY = -halfH * (1 - h) + (-archH) * h;
+      const botArchY = halfH * (1 - h) + (halfH * 0.35) * h;
+      const innerArchY = halfH * (1 - h) + (-archH * 0.3) * h;
+
+      ctx.moveTo(-halfW, botArchY);
+      ctx.quadraticCurveTo(0, topArchY, halfW, botArchY);
+      ctx.quadraticCurveTo(0, innerArchY, -halfW, botArchY);
       ctx.closePath();
     } else {
       // Standard dome eye from user reference image:
@@ -4007,13 +4014,12 @@ button{font:inherit}
     const glareAlpha = Math.max(0, Math.min(1, (eh - ew * 0.16) / (ew * 0.45))) * 0.88;
     if (glareAlpha > 0.08) {
       ctx.save();
-      // Turn off drop shadow for crisp specular glass glare
       ctx.shadowColor = 'transparent';
       ctx.shadowBlur = 0;
 
-      if (isHappy) {
+      if (happyBlend > 0.5) {
         // Subtle glossy shimmer along the smiling crescent
-        ctx.fillStyle = `rgba(255, 255, 255, ${glareAlpha * 0.55})`;
+        ctx.fillStyle = `rgba(255, 255, 255, ${glareAlpha * 0.55 * happyBlend})`;
         ctx.beginPath();
         ctx.ellipse(halfW * 0.15, -halfH * 0.25, ew * 0.16, Math.max(2, eh * 0.08), -0.1, 0, Math.PI * 2);
         ctx.fill();
@@ -4025,13 +4031,13 @@ button{font:inherit}
         const gh = Math.max(3, eh * 0.18);
 
         ctx.rotate(-0.16);
-        ctx.fillStyle = `rgba(255, 255, 255, ${glareAlpha * 0.82})`;
+        ctx.fillStyle = `rgba(255, 255, 255, ${glareAlpha * 0.82 * (1 - happyBlend * 0.4)})`;
         ctx.beginPath();
         drawRoundedRect(ctx, gx - gw / 2, gy - gh / 2, gw, gh, gh / 2);
         ctx.fill();
 
         // Secondary subtle micro-glare dot
-        ctx.fillStyle = `rgba(255, 255, 255, ${glareAlpha * 0.60})`;
+        ctx.fillStyle = `rgba(255, 255, 255, ${glareAlpha * 0.60 * (1 - happyBlend * 0.4)})`;
         ctx.beginPath();
         ctx.arc(gx + gw * 0.62, gy + gh * 0.72, Math.max(1.5, ew * 0.038), 0, Math.PI * 2);
         ctx.fill();
@@ -4042,7 +4048,7 @@ button{font:inherit}
     ctx.restore();
   }
 
-  function drawMouth(ctx, mx, my, mw, mh, mouthParam, talkingOpen, state) {
+  function drawMouth(ctx, mx, my, mw, mh, mouthParam, talkingOpen, smileBlend, sadBlend, surpriseBlend) {
     ctx.save();
     ctx.translate(mx, my);
 
@@ -4053,28 +4059,40 @@ button{font:inherit}
       const openW = mw * (1 + talkingOpen * 0.3);
       drawRoundedRect(ctx, -openW / 2, -openH / 2, openW, openH, Math.min(openW / 2, openH / 2));
       ctx.fill();
-    } else if (['happy', 'excited', 'love'].includes(state)) {
-      // Cheerful smile curve
-      const curveW = mw * 1.35;
-      const curveH = mh * 1.4;
-      ctx.moveTo(-curveW / 2, -curveH * 0.2);
-      ctx.quadraticCurveTo(0, curveH * 0.85, curveW / 2, -curveH * 0.2);
-      ctx.quadraticCurveTo(0, curveH * 0.25, -curveW / 2, -curveH * 0.2);
+    } else if (surpriseBlend > 0.08) {
+      // Smooth morph between resting pill and open surprised oval
+      const s = Math.min(1, Math.max(0, surpriseBlend));
+      const curW = mw * (1 - s * 0.35);
+      const curH = mh + (Math.max(mw * 0.4, mh * 0.85) * 2 - mh) * s;
+      ctx.ellipse(0, 0, curW / 2, curH / 2, 0, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (smileBlend > 0.04) {
+      // Smooth morph between resting pill and cheerful smile curve
+      const s = Math.min(1, Math.max(0, smileBlend));
+      const curW = mw * (1 + s * 0.35);
+      const curH = mh * (1 + s * 0.40);
+      const topY = -curH * 0.2 * s - (mh / 2) * (1 - s);
+      const botY = curH * 0.85 * s + (mh / 2) * (1 - s);
+      const innerY = curH * 0.25 * s - (mh / 2) * (1 - s);
+
+      ctx.moveTo(-curW / 2, topY);
+      ctx.quadraticCurveTo(0, botY, curW / 2, topY);
+      ctx.quadraticCurveTo(0, innerY, -curW / 2, topY);
       ctx.closePath();
       ctx.fill();
-    } else if (['sad'].includes(state)) {
-      // Subtle sad curve
-      const curveW = mw * 1.15;
-      const curveH = mh * 1.1;
-      ctx.moveTo(-curveW / 2, curveH * 0.4);
-      ctx.quadraticCurveTo(0, -curveH * 0.6, curveW / 2, curveH * 0.4);
-      ctx.quadraticCurveTo(0, -curveH * 0.1, -curveW / 2, curveH * 0.4);
+    } else if (sadBlend > 0.04) {
+      // Smooth morph between resting pill and sad downward curve
+      const s = Math.min(1, Math.max(0, sadBlend));
+      const curW = mw * (1 + s * 0.15);
+      const curH = mh * (1 + s * 0.10);
+      const topY = curH * 0.4 * s + (mh / 2) * (1 - s);
+      const botY = -curH * 0.6 * s - (mh / 2) * (1 - s);
+      const innerY = -curH * 0.1 * s + (mh / 2) * (1 - s);
+
+      ctx.moveTo(-curW / 2, topY);
+      ctx.quadraticCurveTo(0, botY, curW / 2, topY);
+      ctx.quadraticCurveTo(0, innerY, -curW / 2, topY);
       ctx.closePath();
-      ctx.fill();
-    } else if (['surprised', 'alert'].includes(state)) {
-      // Open surprised circle/oval
-      const oR = Math.max(mw * 0.4, mh * 0.85);
-      ctx.ellipse(0, 0, oR * 0.75, oR, 0, 0, Math.PI * 2);
       ctx.fill();
     } else {
       // Resting pill mouth (exact match to reference photo!)
@@ -4104,22 +4122,51 @@ button{font:inherit}
 
       t += dt / 1000;
 
-      // Natural eye blinking
+      // Natural organic blinking physics modulated by character curiosity
+      const isCurious = state === 'curious' || emotionalState === 'curious';
       blinkTimer -= dt;
-      if(blinkTimer <= 0){
+
+      if (blinkTimer <= 0) {
         blink = 0.001;
-        blinkTimer = 2400 + Math.random() * 3200;
-      }
-      if(blink > 0){
-        blink += dt / 110;
-        if(blink >= 1.9) blink = 0;
+        // Curiosity-driven blinking logic:
+        // When curious, the robot is observing intently, then does an inquisitive flutter or double-blink!
+        if (isCurious && !isDoubleBlink && Math.random() < 0.48) {
+          isDoubleBlink = true;
+          blinkTimer = 110 + 240; // secondary flutter blink triggers in ~110ms after first
+        } else {
+          isDoubleBlink = false;
+          // Curious states have active observation blinks (1.4s - 2.8s) vs calm idle (2.8s - 4.8s)
+          blinkTimer = isCurious
+            ? (1400 + Math.random() * 1800)
+            : (2800 + Math.random() * 3200);
+        }
       }
 
-      // Smooth state transition blending
-      stateBlend = Math.min(1, stateBlend + dt / 240);
+      if (blink > 0) {
+        // Curious blinks are crisp & inquisitive; calm blinks are smooth & gentle
+        const blinkSpeed = isCurious ? 95 : 120;
+        blink += dt / blinkSpeed;
+        if (blink >= 1.95) blink = 0;
+      }
+
+      // Smooth sinusoidal / ease-out blink curve (organic eyelid physics)
+      let blinkAmount = 0;
+      if (blink > 0 && blink < 1.95) {
+        if (blink <= 1.0) {
+          // Eyelid closing: natural sine ease-in acceleration
+          blinkAmount = 1 - Math.cos((blink * Math.PI) / 2);
+        } else {
+          // Eyelid opening: soft, cushioned decelerating ease-out
+          const openProg = blink - 1.0;
+          blinkAmount = Math.cos((openProg * Math.PI) / 2);
+        }
+      }
+
+      // Smooth state transition blending (460ms organic morph)
+      stateBlend = Math.min(1, stateBlend + dt / 460);
       const a = stateData[previousState] || stateData.neutral;
       let b = stateData[state] || stateData.neutral;
-      if(!["listening","thinking","talking"].includes(state)){
+      if (!["listening","thinking","talking"].includes(state)) {
         const intensity = Math.max(.18, Math.min(1, emotionalIntensity));
         b = {
           scale: 1.02 + (b.scale - 1.02) * intensity,
@@ -4130,7 +4177,9 @@ button{font:inherit}
           glow: .20 + (b.glow - .20) * intensity
         };
       }
-      const k = stateBlend < .5 ? 2*stateBlend*stateBlend : 1-Math.pow(-2*stateBlend+2,2)/2;
+
+      // Cosine S-curve easing (smoothstep ease-in-out)
+      const k = 0.5 - 0.5 * Math.cos(stateBlend * Math.PI);
       const glow = lerp(a.glow, b.glow, k);
       const faceScale = lerp(a.scale || 1, b.scale || 1, k);
 
@@ -4139,7 +4188,28 @@ button{font:inherit}
       const brow = lerp(a.brow, b.brow, k);
       const mouth = lerp(a.mouth, b.mouth, k);
       const tilt = lerp(a.tilt, b.tilt, k);
-      const blinkAmount = blink > 0 ? (blink <= 1 ? blink : 2 - blink) : 0;
+
+      // Smooth emotion shape morphs between states
+      const HAPPY_STATES = ['happy', 'excited', 'love'];
+      const SAD_STATES = ['sad', 'angry'];
+      const SURPRISE_STATES = ['surprised', 'alert'];
+
+      const prevHappy = HAPPY_STATES.includes(previousState) ? 1 : 0;
+      const targetHappy = HAPPY_STATES.includes(state) ? 1 : 0;
+      const happyBlend = lerp(prevHappy, targetHappy, k);
+
+      const prevSmile = HAPPY_STATES.includes(previousState) ? 1 : 0;
+      const targetSmile = HAPPY_STATES.includes(state) ? 1 : 0;
+      const smileBlend = lerp(prevSmile, targetSmile, k);
+
+      const prevSad = SAD_STATES.includes(previousState) ? 1 : 0;
+      const targetSad = SAD_STATES.includes(state) ? 1 : 0;
+      const sadBlend = lerp(prevSad, targetSad, k);
+
+      const prevSurprise = SURPRISE_STATES.includes(previousState) ? 1 : 0;
+      const targetSurprise = SURPRISE_STATES.includes(state) ? 1 : 0;
+      const surpriseBlend = lerp(prevSurprise, targetSurprise, k);
+
       const talkingNow = state === 'talking' || talking;
       const talkOpen = talkingNow ? (0.04 + (0.5 + 0.5 * Math.sin(t * 16.0)) * 0.08) : 0;
 
@@ -4174,7 +4244,6 @@ button{font:inherit}
         mouthY = cy + ehBase * 0.52 + Math.min(26, ch * 0.05);
       }
 
-      const eh = Math.max(ew * 0.08, ehBase * eyeOpen * (1 - blinkAmount * 0.95));
       const cr = ew * 0.12;
 
       ctx.save();
@@ -4188,19 +4257,19 @@ button{font:inherit}
       ctx.shadowBlur = Math.round(ew * (0.16 + glow * 0.14));
       ctx.fillStyle = '#00e5ff';
 
-      const isHappy = ['happy', 'excited', 'love'].includes(state);
-      const isSleepy = state === 'sleepy';
-
       // Left Eye (-1) and Right Eye (+1)
       const eyeOffset = eyeGap / 2 + ew / 2;
       [-1, 1].forEach(side => {
         const ex = cx + side * eyeOffset;
         const browSlant = brow * 0.45;
-        drawDomeEye(ctx, ex, cy, ew, eh, cr, browSlant, isHappy, side);
+        // When curious, apply subtle asymmetric focus (inquisitive head cock & eye focus)
+        const curiousTiltEye = isCurious ? (side < 0 ? 1.05 : 0.95) : 1.0;
+        const eh = Math.max(ew * 0.08, ehBase * eyeOpen * curiousTiltEye * (1 - blinkAmount * 0.94));
+        drawDomeEye(ctx, ex, cy, ew, eh, cr, browSlant, happyBlend, side);
       });
 
-      // Mouth: glowing pill below eyes
-      drawMouth(ctx, cx, mouthY, mouthW, mouthH, mouth, talkOpen, state);
+      // Mouth: glowing pill below eyes with continuous smooth morphing
+      drawMouth(ctx, cx, mouthY, mouthW, mouthH, mouth, talkOpen, smileBlend, sadBlend, surpriseBlend);
 
       ctx.restore();
 
