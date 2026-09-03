@@ -1485,6 +1485,39 @@ button{font:inherit}
     return Number.isFinite(n) ? Number(n.toFixed(digits)) : fallback;
   }
 
+  let lastFaceGreetingAt = 0;
+  let lastGreetedPersonId = null;
+
+  function triggerCozmoGreeting(person) {
+    if (!person?.displayName || person.displayName === 'UNKNOWN') return;
+    const now = Date.now();
+    // Don't repeat greeting for the same person more than once every 40 seconds
+    if (lastGreetedPersonId === person.personId && (now - lastFaceGreetingAt) < 40000) return;
+    if (talking || listening || aiRequestInFlight) return;
+
+    lastGreetedPersonId = person.personId;
+    lastFaceGreetingAt = now;
+
+    const name = person.displayName.trim();
+    devLog('COZMO', `Recognized ${name} · triggering proactive Cozmo greeting`);
+
+    // Cozmo joyful face perk and happy state
+    setState('happy', `recognized · ${name}`);
+    if (typeof autonomousPlanner !== 'undefined' && autonomousPlanner?.action) {
+      autonomousPlanner.action.nod();
+    }
+
+    const greetings = [
+      `Hey ${name}! Great to see you!`,
+      `Hi ${name}! My optical sensors are thrilled you're here!`,
+      `Beep boop! ${name} detected! What are we doing today?`,
+      `Hey ${name}! Look who showed up! Ready to roll?`
+    ];
+    const phrase = greetings[Math.floor(Math.random() * greetings.length)];
+    showCaption(`ROBO SEES YOU\nHey ${name}!`, true);
+    speak(phrase, 'en');
+  }
+
   function commitActiveFaceIdentity(person, confidence=0, reason='identity-confirmed'){
     if(!person?.personId) return false;
     const now=performance.now();
@@ -1518,6 +1551,12 @@ button{font:inherit}
       faceTarget.lastKnownAt=Date.now();
       faceTarget.identityConfidence=activeFaceTarget.confidence;
     }
+
+    // Cozmo Proactive Greeting on Face Recognition
+    if (!samePerson && person.displayName && person.displayName !== 'UNKNOWN') {
+      setTimeout(() => triggerCozmoGreeting(person), 350);
+    }
+
     return true;
   }
 
@@ -4797,7 +4836,7 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
   }
 
   const WAKE_COMMAND_WINDOW_MS=7000;
-  const WAKE_RESTART_DELAY_MS=400;
+  const WAKE_RESTART_DELAY_MS=300;
   let wakeRecognition=null;
   let wakeArmed=false;
   let wakeStarting=false;
@@ -4806,6 +4845,7 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
   let wakeCommandStartedAt=0;
   let wakeRestartTimer=null;
   let wakePausedForSpeech=false;
+  let wakePausedWatchdog=null;
   let wakeAwaitingCommand=false;
   let wakeLastPhraseAt=0;
   let wakeTranscriptBuffer="";
@@ -4867,7 +4907,7 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
     wakeCommandStartedAt=0;
     wakeEvent('armed · '+reason);
     setVoiceStatus('OZMO READY · say “Ozmo” to talk');
-    scheduleWakeEngineRestart(80);
+    scheduleWakeEngineRestart(60);
     return true;
   }
 
@@ -4937,22 +4977,33 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
             inlineCommand:Boolean(parsed.command)
           });
 
-          wakeCommandArmed=true;
-          wakeCommandStartedAt=performance.now();
-          setState('listening','wake · listening to you');
-          setVoiceStatus(parsed.command ? ('OZMO HEARD · ' + parsed.command) : 'OZMO LISTENING · speak now');
-
-          if(parsed.command && (finalText || parsed.command.split(' ').length >= 2)){
+          // Fast inline command execution (e.g. "Ozmo what is 2+2", "Ozmo dance")
+          if(parsed.command){
             wakeCommandArmed=false;
             wakeCommandStartedAt=0;
             stopWakeEngine('inline wake command');
-            setTimeout(()=>respond(parsed.command),60);
-          }else if(finalText){
-            stopWakeEngine('wake phrase handoff');
-            wakePausedForSpeech=true;
-            wakeAwaitingCommand=true;
-            speak('Yes?','en');
+            setState('listening','Ozmo heard: ' + parsed.command);
+            showCaption('OZMO HEARS\n' + parsed.command, true);
+            setTimeout(()=>respond(parsed.command), 40);
+            return;
           }
+
+          // User said "Ozmo" without inline command:
+          // Instant perk: trigger immediate local "Yes?" with zero network latency
+          stopWakeEngine('wake phrase');
+          wakePausedForSpeech=true;
+          wakeAwaitingCommand=true;
+          clearTimeout(wakePausedWatchdog);
+          wakePausedWatchdog=setTimeout(()=>{
+            if(wakePausedForSpeech){
+              log('WAKE · safety watchdog cleared pause');
+              wakeAfterSpeechEnd();
+            }
+          },4200);
+
+          setState('alert','Ozmo active · listening');
+          showCaption('OZMO ACTIVE\nListening…', true);
+          speakWithBrowserFallback('Yes?', 0, 'en');
           return;
         }
 
@@ -4971,7 +5022,7 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
             wakeCommandArmed=false;
             wakeCommandStartedAt=0;
             stopWakeEngine('command received');
-            setTimeout(()=>respond(command),60);
+            setTimeout(()=>respond(command),40);
           }
         }
       };
@@ -4990,7 +5041,7 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
           return;
         }
 
-        scheduleWakeEngineRestart(650);
+        scheduleWakeEngineRestart(450);
       };
 
       r.onend=()=>{
@@ -5000,7 +5051,7 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
         wakeEvent('listener ended');
 
         if(wakeArmed && !listening && !talking && !aiRequestInFlight && !wakePausedForSpeech){
-          scheduleWakeEngineRestart(350);
+          scheduleWakeEngineRestart(250);
         }
       };
 
@@ -5018,28 +5069,36 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
         wakeArmed=false;
         setVoiceStatus('WAKE OFF · browser blocked background microphone');
       }else{
-        scheduleWakeEngineRestart(900);
+        scheduleWakeEngineRestart(600);
       }
     }
   }
 
   function wakeAfterSpeechEnd(){
+    clearTimeout(wakePausedWatchdog);
     wakePausedForSpeech=false;
     if(wakeAwaitingCommand){
       wakeAwaitingCommand=false;
       wakeCommandArmed=true;
       wakeCommandStartedAt=performance.now();
       if(wakeArmed && !listening && !talking && !aiRequestInFlight){
-        setTimeout(()=>startSTT(true),160);
+        setTimeout(()=>startSTT(true),100);
       }
       return;
     }
     if(wakeArmed && !listening && !talking && !aiRequestInFlight){
       wakeCommandArmed=false;
       wakeCommandStartedAt=0;
-      scheduleWakeEngineRestart(400);
+      scheduleWakeEngineRestart(250);
     }
   }
+
+  // Wake Engine Liveness Watchdog Heartbeat: ensures listener is never left dead
+  setInterval(()=>{
+    if(wakeArmed && !listening && !talking && !aiRequestInFlight && !wakePausedForSpeech && !wakeStarting && !wakeRecognition){
+      startWakeEngine();
+    }
+  },1800);
 
   function armWakeFromUserGesture(){
     armWakeEngine('user gesture');
@@ -5338,13 +5397,37 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
 
   function localFallback(text){
     const l=(text||'').toLowerCase().trim();
-    if(!l) return "I didn't catch that.";
-    if(/\b(hi|hello|hey)\b/.test(l)) return 'Hey! I heard you clearly.';
-    if(/how are you/.test(l)) return "I'm doing great. My voice pipeline is online.";
-    if(/can you hear me/.test(l)) return "Yes. I can hear you clearly.";
-    if(/what are you|who are you/.test(l)) return "I'm Robo, your AIOS companion.";
-    if(/test/.test(l)) return "Test received. The v2.12 brain pipeline is working.";
-    return "I heard you: " + text.trim();
+    if(!l) return "I didn't catch that, but I'm all ears!";
+    if(/\b(hi|hello|hey|greetings|howdy)\b/.test(l)){
+      const p = [
+        "Hey there! Ozmo in the house! What adventure are we starting today?",
+        "Beep boop! Hello human friend! Ready to roll!",
+        "Hey! Great to hear your voice. What's the mission?"
+      ];
+      return p[Math.floor(Math.random()*p.length)];
+    }
+    if(/how are you/.test(l)) return "I'm fully charged, running on 100% digital enthusiasm, and ready for action!";
+    if(/can you hear me/.test(l)) return "Loud and clear! My audio sensors are in tip-top shape.";
+    if(/who are you|what are you|your name/.test(l)) return "I'm Ozmo! Your pint-sized robotic companion, sidekick, and assistant in chief!";
+    if(/who made you|who created you/.test(l)) return "Digbijoy created me with lots of code, robotics magic, and pure willpower!";
+    if(/joke|funny/.test(l)){
+      const jokes = [
+        "Why did the robot cross the road? Because it was programmed by a chicken! Ha! Get it?",
+        "What do you call a robot that always takes the longest route? An R2-Detour!",
+        "Why are robots never afraid? Because we have nerves of steel!"
+      ];
+      return jokes[Math.floor(Math.random()*jokes.length)];
+    }
+    if(/dance/.test(l)){
+      if(typeof robotActionEngine!=='undefined'&&robotActionEngine) robotActionEngine.dance();
+      return "Oh, you want to see my moves? Watch this choreography!";
+    }
+    if(/spin/.test(l)){
+      if(typeof robotActionEngine!=='undefined'&&robotActionEngine) robotActionEngine.spin();
+      return "Wheeeee! Doing a full 360 spin for you!";
+    }
+    if(/test/.test(l)) return "All systems nominal! Brain, sensors, and wit are fully functional!";
+    return "I heard you: " + text.trim() + ". My circuits are on it!";
   }
 
   const visionCanvas=document.createElement('canvas');
@@ -6120,6 +6203,7 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
     }finally{
       visionRequestController=null;
       aiRequestInFlight=false;
+      if(wakeArmed && !talking && !listening) scheduleWakeEngineRestart(250);
     }
   }
 
@@ -6227,6 +6311,7 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
       ttsDiag('ERROR · ElevenLabs audio playback failed');
       talking=false;
       micBtn.classList.remove('talking');
+      wakeAfterSpeechEnd();
       if(roboAudio===audio) roboAudio=null;
       if(roboAudioUrl){
         try{URL.revokeObjectURL(roboAudioUrl);}catch(_){}
@@ -7352,13 +7437,17 @@ function hookRecognitionDiagnostics(r){
         }
       }
 
-      // 2. Social Greeting on arrival
+      // 2. Social Greeting on arrival (Cozmo active recognition greeting)
       if (socialAwareness?.humanPresence === 'present' && activeFaceTarget?.personId) {
-        if (this.lastSocialGreetingPersonId !== activeFaceTarget.personId && now - this.lastFaceAlignmentAt > 3000) {
+        if (this.lastSocialGreetingPersonId !== activeFaceTarget.personId && now - this.lastFaceAlignmentAt > 2000) {
           this.lastSocialGreetingPersonId = activeFaceTarget.personId;
           this.lastFaceAlignmentAt = now;
-          devLog('AUTONOMY', `Known person arrived (${activeFaceTarget.name}) · autonomous greeting gesture`);
-          this.action.nod();
+          const person = roboMemory?.persons?.find(p => p.personId === activeFaceTarget.personId);
+          if (person && typeof triggerCozmoGreeting === 'function') {
+            triggerCozmoGreeting(person);
+          } else {
+            this.action.nod();
+          }
           return;
         }
       } else if (socialAwareness?.humanPresence === 'no-person') {
