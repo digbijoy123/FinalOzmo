@@ -4509,6 +4509,7 @@ button{font:inherit}
       const source=micAudioContext.createMediaStreamSource(stream);
       source.connect(micAnalyser);
       const data=new Uint8Array(micAnalyser.fftSize);
+      let micBargeInFrames = 0;
       const tick=()=>{
         if(!micAnalyser) return;
         micAnalyser.getByteTimeDomainData(data);
@@ -4516,6 +4517,20 @@ button{font:inherit}
         for(const v of data){ const n=(v-128)/128; sum+=n*n; }
         micVoiceLevel=Math.min(1,Math.sqrt(sum/data.length)*3.8);
         if(micVoiceLevel>.045 && !listening) log('MIC · sound detected');
+
+        // Acoustic Barge-in watchdog: if Max is speaking and hears user's voice energy, mute Max immediately!
+        if(talking && micVoiceLevel > 0.32){
+          micBargeInFrames++;
+          if(micBargeInFrames >= 6){ // ~100ms of sustained voice energy
+            micBargeInFrames = 0;
+            if(typeof stopSpeakingAndListen === 'function'){
+              stopSpeakingAndListen('acoustic-energy-barge-in');
+            }
+          }
+        } else {
+          micBargeInFrames = 0;
+        }
+
         micMeterRAF=requestAnimationFrame(tick);
       };
       tick();
@@ -5132,10 +5147,27 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
     }
 
     handleResults(e) {
+      // Voice Barge-In: if the robot is currently speaking and user speaks, immediately interrupt & listen!
       if (talking || this.mode === VoiceMode.SPEAKING) {
+        let bargeInText = '';
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+          const res = e.results[i];
+          const alt = res && res[0];
+          if (alt && alt.transcript) {
+            bargeInText += (bargeInText ? ' ' : '') + String(alt.transcript).trim();
+          }
+        }
+        bargeInText = bargeInText.trim();
+        if (bargeInText.length >= 1) {
+          if (typeof stopSpeakingAndListen === 'function') {
+            stopSpeakingAndListen('voice-barge-in: ' + bargeInText);
+          }
+          this.transcriptBuffer = bargeInText;
+          showCaption('MAX HEARS\n' + bargeInText, true);
+        }
         return;
       }
-      if (performance.now() - this.lastSpokenEndedAt < 400) {
+      if (performance.now() - this.lastSpokenEndedAt < 300) {
         return;
       }
 
@@ -5675,10 +5707,32 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
         this.scriptProcessor = this.audioInputContext.createScriptProcessor(bufferSize, 1, 1);
 
         const inputSampleRate = this.audioInputContext.sampleRate;
+        let liveBargeInFrames = 0;
 
         this.scriptProcessor.onaudioprocess = (e) => {
           if (!this.connected || this.isMuted) return;
           const inputData = e.inputBuffer.getChannelData(0);
+
+          // Real-time Instant Voice Barge-In:
+          // If Max is speaking audio output and user speaks into mic, mute Max immediately!
+          if (this.isPlaying) {
+            let sum = 0;
+            for (let i = 0; i < inputData.length; i++) {
+              sum += inputData[i] * inputData[i];
+            }
+            const rms = Math.sqrt(sum / inputData.length);
+            if (rms > 0.048) {
+              liveBargeInFrames++;
+              if (liveBargeInFrames >= 3) { // ~120ms of voice
+                this.bargeInCount++;
+                devLog('LIVE', `Instant barge-in detected (${(rms * 100).toFixed(1)}% vol) · muting Max`);
+                this.interrupt();
+                liveBargeInFrames = 0;
+              }
+            } else {
+              liveBargeInFrames = 0;
+            }
+          }
           
           // Downsample to 16kHz
           const downsampled = downsampleBuffer(inputData, inputSampleRate, 16000);
@@ -6849,7 +6903,7 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
   let roboAudioUrl=null;
   let roboSpeechToken=0;
 
-  function stopRoboAudio(reason='stopped'){
+  function stopSpeakingAndListen(reason='barge-in'){
     roboSpeechToken++;
     if(roboAudio){
       try{
@@ -6865,9 +6919,25 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
       try{URL.revokeObjectURL(roboAudioUrl);}catch(_){}
       roboAudioUrl=null;
     }
+    if('speechSynthesis' in window){
+      try{ speechSynthesis.cancel(); }catch(_){}
+    }
     talking=false;
-    micBtn.classList.remove('talking');
-    if(reason) log('TTS · '+reason);
+    const mic = document.getElementById('micBtn');
+    if(mic) mic.classList.remove('talking');
+    log('TTS · user interrupted Max · muted speech (' + reason + ')');
+    
+    // Switch voice engine to ACTIVE_LISTENING so Max immediately captures the user's voice
+    if(typeof voiceEngine !== 'undefined' && voiceEngine) {
+      voiceEngine.setMode(VoiceMode.ACTIVE_LISTENING);
+    }
+    setState('listening', 'user interrupted · Max listening');
+    showCaption('MAX LISTENING\nListening to you…', true);
+  }
+  window.stopSpeakingAndListen = stopSpeakingAndListen;
+
+  function stopRoboAudio(reason='stopped'){
+    stopSpeakingAndListen(reason);
   }
 
   async function speakWithElevenLabs(text, token, languageHint='en'){
