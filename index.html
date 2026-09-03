@@ -4501,6 +4501,37 @@ button{font:inherit}
     log('VOICE · '+text);
   }
 
+  function playCozmoWakeChime(){
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const now = ctx.currentTime;
+      // High-tone cute companion robot wake chirp
+      const osc1 = ctx.createOscillator();
+      const gain1 = ctx.createGain();
+      osc1.type = 'sine';
+      osc1.frequency.setValueAtTime(540, now);
+      osc1.frequency.exponentialRampToValueAtTime(820, now + 0.07);
+      gain1.gain.setValueAtTime(0.25, now);
+      gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+      osc1.connect(gain1);
+      gain1.connect(ctx.destination);
+      osc1.start(now);
+      osc1.stop(now + 0.08);
+
+      const osc2 = ctx.createOscillator();
+      const gain2 = ctx.createGain();
+      osc2.type = 'triangle';
+      osc2.frequency.setValueAtTime(820, now + 0.08);
+      osc2.frequency.exponentialRampToValueAtTime(1150, now + 0.16);
+      gain2.gain.setValueAtTime(0.28, now + 0.08);
+      gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+      osc2.connect(gain2);
+      gain2.connect(ctx.destination);
+      osc2.start(now + 0.08);
+      osc2.stop(now + 0.18);
+    } catch (_) {}
+  }
+
   function startMicMeter(stream){
     try{
       micAudioContext=new (window.AudioContext||window.webkitAudioContext)();
@@ -4977,7 +5008,12 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
     ACTIVE_CONVERSATION: 'ACTIVE_CONVERSATION'  // Continuous multi-turn topic dialogue
   };
 
-  const WAKE_WORDS = ['max','maxy','maxie','maks','macks','macs','mex','matts','ozmo','osmo','cosmo','robo','robot'];
+  const WAKE_WORDS = [
+    'max','mac','mack','maks','macks','maxy','maxie','mex','mix','mag','mags','meg','megs',
+    'mat','matt','matts','match','matches','mask','masks','mass','mark','marks','mike','mick',
+    'make','makes','next','axe','lax','tax','wax','fox','box','backs',
+    'ozmo','osmo','cozmo','cosmo','robo','robot','heymax','okmax'
+  ];
   const CONVERSATION_STOP_RE = /\b(?:stop|exit|quit|cancel|bye|goodbye|see you|sleep|go to sleep|shut up|quiet|silence|that's all|that is all|that's it|thats all|thank you|thanks|bas|alvida|done|khatam)\b/i;
 
   let conversationActive = false;
@@ -5010,7 +5046,8 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
       const t = this.normalize(token);
       if (!t) return false;
       if (WAKE_WORDS.includes(t)) return true;
-      if (['max', 'maks', 'macks', 'maxy', 'maxie', 'mex', 'macs'].includes(t)) return true;
+      // Phonetic pattern: starts with 'm', length 3-5, ends in x/k/c/s/g/t
+      if (/^m[a-z]{1,2}(?:x|k|ck|c|ks|s|g|t)$/i.test(t)) return true;
       if (t.length >= 2 && t.length <= 6) {
         const target = 'max';
         let prev = [0, 1, 2, 3];
@@ -5039,8 +5076,25 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
     }
 
     parseWakeUtterance(text) {
-      const clean = this.normalize(text);
+      const raw = String(text || '').trim();
+      const clean = this.normalize(raw);
       if (!clean) return { woken: false, command: '' };
+
+      // 1. Standalone action commands that wake Max directly
+      if (/^(?:please\s+)?(?:go\s+live|start\s+live|live\s+mode|wake\s+up|listen\s+up|listen\s+to\s+me)\b/i.test(clean)) {
+        return { woken: true, command: clean };
+      }
+
+      // 2. Direct regex match on full clean string
+      const wakeRegex = /\b(?:hey|hi|hello|ok|okay|yo|listen|wake\s+up)?\s*(max|mac|mack|maks|macks|maxy|maxie|mex|mix|mag|mags|meg|mat|matt|mats|match|mask|mass|mark|marks|mike|mick|make|makes|next|cozmo|cosmo|ozmo|osmo|robo|robot)\b/i;
+      const match = clean.match(wakeRegex);
+      if (match) {
+        const matchEnd = match.index + match[0].length;
+        const command = clean.slice(matchEnd).trim();
+        return { woken: true, command };
+      }
+
+      // 3. Fallback token-by-token check
       const tokens = clean.split(' ');
       let wakeIndex = -1;
       for (let i = 0; i < tokens.length; i++) {
@@ -5050,15 +5104,12 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
           break;
         }
       }
-      if (wakeIndex < 0) return { woken: false, command: '' };
+      if (wakeIndex >= 0) {
+        const commandTokens = tokens.slice(wakeIndex + 1);
+        return { woken: true, command: commandTokens.join(' ').trim() };
+      }
 
-      const commandTokens = tokens.filter((tok, idx) => {
-        if (idx === wakeIndex) return false;
-        if (idx < wakeIndex && ['hey', 'hi', 'hello', 'ok', 'okay', 'yo'].includes(tok)) return false;
-        return true;
-      });
-      const command = commandTokens.join(' ').trim();
-      return { woken: true, command };
+      return { woken: false, command: '' };
     }
 
     arm(reason = 'gesture') {
@@ -5207,18 +5258,13 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
           return;
         }
 
-        // Spoke wake word ("Max" / "Hey Max") without command: acknowledge verbally!
-        const ackResponses = [
-          "Yes? I'm listening!",
-          "Hey! What can I do for you?",
-          "I'm here! What's on your mind?",
-          "Listening!"
-        ];
-        const ack = ackResponses[Math.floor(Math.random() * ackResponses.length)];
+        // Spoke wake word ("Max" / "Hey Max") without command:
+        // Play instant Cozmo robot chirp and open active listening window without mic blockage!
+        playCozmoWakeChime();
+        this.setMode(VoiceMode.ACTIVE_LISTENING);
         setState('happy', 'Max acknowledged wake word');
-        showCaption('MAX\n' + ack, true);
-        setVoiceStatus('MAX LISTENING · speak your command…');
-        speak(ack, 'en');
+        showCaption('MAX\nListening!', true);
+        setVoiceStatus('MAX LISTENING · speak your command…', 4000);
         return;
       }
 
