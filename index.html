@@ -4827,559 +4827,413 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
 
     /* ---------- Speech recognition (v2.12 hardened pipeline) ---------- */
   const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-  let sttSession=0;
-  let sttHadResult=false;
-  let sttHadSpeech=false;
-  let sttRetryUsed=false;
-  let sttLastErrorCode="";
-  let sttNoMatch=false;
-  let sttWatchdog=null;
-  let sttStartingWatchdog=null;
+  /* ==========================================================================
+     ROBO AIOS v3 — UNIFIED WAKE & VOICE ENGINE (MAX)
+     Single continuous SpeechRecognition pipeline:
+     - Eliminates microphone device lockups, abort/start race conditions & audio-capture dropouts
+     - Instant Wake Word ("MAX") detection with bidirectional & casual sentence parsing
+     - Continuous Multi-Turn Active Topic Conversation (keeps listening without repeating "Max")
+     - Silence VAD & Conversational Graceful Standby Return
+     - Acoustic Echo Suppression while speaking (TTS)
+     - Resilient Single-Flight Supervisor with Exponential Backoff
+     ========================================================================== */
+  const VoiceMode = {
+    STANDBY_WAKE: 'STANDBY_WAKE',               // Waiting for wake phrase ("Max")
+    ACTIVE_LISTENING: 'ACTIVE_LISTENING',       // Capturing user's query/command
+    THINKING: 'THINKING',                       // Processing query with AI brain
+    SPEAKING: 'SPEAKING',                       // Speaking response (echo suppressed)
+    ACTIVE_CONVERSATION: 'ACTIVE_CONVERSATION'  // Continuous multi-turn topic dialogue
+  };
 
-  /* ---------- Wake Engine v1 ----------
-     Experimental layer built on the frozen v2.81 perception baseline.
-     One explicit microphone gesture arms the background wake listener.
-     Manual mic remains available as a deterministic fallback.
-  */
-  const WAKE_PHRASE_RE=/\b(?:hey[\s,]+|ok[\s,]+|okay[\s,]+|hello[\s,]+|hi[\s,]+|yo[\s,]+)?(?:max|maxy|maxie|maks|macks|macs|mex|ozmo|osmo|cosmo|robo|robot)\b/i;
-  const WAKE_WORDS=['max','maxy','maxie','maks','macks','macs','mex','ozmo','osmo','cosmo','robo','robot','robu','rubo'];
+  const WAKE_WORDS = ['max','maxy','maxie','maks','macks','macs','mex','matts','ozmo','osmo','cosmo','robo','robot'];
+  const CONVERSATION_STOP_RE = /\b(?:stop|exit|quit|cancel|bye|goodbye|see you|sleep|go to sleep|shut up|quiet|silence|that's all|that is all|that's it|thats all|thank you|thanks|bas|alvida|done|khatam)\b/i;
 
-  function normalizeWakeText(text){return String(text||'').toLowerCase().replace(/[^a-z0-9\s]/g,' ').replace(/\s+/g,' ').trim();}
-
-  function wakeTokenLooksLikeWakeWord(token){
-    const t=normalizeWakeText(token); if(!t) return false;
-    if(WAKE_WORDS.includes(t)) return true;
-    if(t==='max'||t==='maks'||t==='macks'||t==='maxy'||t==='maxie'||t==='mex'||t==='macs') return true;
-    if(t.length>=2 && t.length<=6){
-      // Levenshtein distance check against 'max'
-      const a0='max'; let p0=[0,1,2,3];
-      for(let i=1;i<=t.length;i++){const cur=[i];for(let j=1;j<=a0.length;j++)cur[j]=Math.min(cur[j-1]+1,p0[j]+1,p0[j-1]+(t[i-1]===a0[j-1]?0:1));p0=cur;}
-      if(p0[3]<=1) return true;
+  class UnifiedVoiceEngine {
+    constructor() {
+      this.mode = VoiceMode.STANDBY_WAKE;
+      this.recognition = null;
+      this.session = 0;
+      this.armed = true;
+      this.starting = false;
+      this.running = false;
+      this.restartTimer = null;
+      this.silenceTimer = null;
+      this.conversationTimeoutTimer = null;
+      this.lastSpeechAt = 0;
+      this.lastSpokenEndedAt = 0;
+      this.CONVERSATION_WINDOW_MS = 10000;
+      this.lastErrorCode = '';
+      this.transcriptBuffer = '';
     }
-    if(t.length>=3 && t.length<=7){
-      // Levenshtein distance check against 'ozmo' as backward-compatible fallback
-      const a1='ozmo'; let p1=[0,1,2,3,4];
-      for(let i=1;i<=t.length;i++){const cur=[i];for(let j=1;j<=a1.length;j++)cur[j]=Math.min(cur[j-1]+1,p1[j]+1,p1[j-1]+(t[i-1]===a1[j-1]?0:1));p1=cur;}
-      if(p1[4]<=1) return true;
+
+    normalize(text) {
+      return String(text || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
     }
-    return false;
-  }
 
-  const WAKE_COMMAND_WINDOW_MS=7000;
-  const WAKE_RESTART_DELAY_MS=250;
-  let wakeRecognition=null;
-  let wakeArmed=true;
-  let wakeStarting=false;
-  let wakeSession=0;
-  let wakeCommandArmed=false;
-  let wakeCommandStartedAt=0;
-  let wakeRestartTimer=null;
-  let wakePausedForSpeech=false;
-  let wakePausedWatchdog=null;
-  let wakeAwaitingCommand=false;
-  let wakeLastPhraseAt=0;
-  let wakeTranscriptBuffer="";
-  let wakeTranscriptBufferAt=0;
-
-  // Active Multi-Turn Conversation Topic Mode
-  let conversationActive=false;
-  let conversationSilenceWatchdog=null;
-  const CONVERSATION_TIMEOUT_MS=10000;
-  const CONVERSATION_STOP_RE=/\b(?:stop|exit|quit|cancel|bye|goodbye|see you|sleep|go to sleep|shut up|quiet|silence|that's all|that is all|that's it|thats all|thank you|thanks|bas|alvida|done|khatam)\b/i;
-
-  function wakeEvent(message,data=null){
-    log('WAKE · '+message+(data ? ' · '+JSON.stringify(data) : ''));
-  }
-
-  function parseWakeUtterance(text){
-    const clean=normalizeWakeText(text); if(!clean) return {woken:false,command:''};
-    const tokens=clean.split(' '); let wakeIndex=-1;
-    for(let i=0;i<tokens.length;i++){
-      if(['hey','hi','hello','ok','okay','yo'].includes(tokens[i])) continue;
-      if(wakeTokenLooksLikeWakeWord(tokens[i])){wakeIndex=i;break;}
-    }
-    if(wakeIndex<0) return {woken:false,command:''};
-
-    // Filter out wake token and any leading greeting/filler particles immediately preceding it
-    const commandTokens = tokens.filter((tok, idx) => {
-      if(idx === wakeIndex) return false;
-      if(idx < wakeIndex && ['hey','hi','hello','ok','okay','yo'].includes(tok)) return false;
-      return true;
-    });
-    const command = commandTokens.join(' ').trim();
-    return {woken:true,command};
-  }
-
-  function stopWakeEngine(reason='stopped'){
-    wakeSession++;
-    wakeStarting=false;
-    if(wakeRestartTimer){
-      clearTimeout(wakeRestartTimer);
-      wakeRestartTimer=null;
-    }
-    const r=wakeRecognition;
-    wakeRecognition=null;
-    wakeTranscriptBuffer="";
-    wakeTranscriptBufferAt=0;
-    if(r){
-      try{r.abort();}catch(_){}
-    }
-    if(reason) wakeEvent('listener stopped · '+reason);
-  }
-
-  function scheduleWakeEngineRestart(delay=WAKE_RESTART_DELAY_MS){
-    if(!wakeArmed || listening || talking || aiRequestInFlight || wakePausedForSpeech) return;
-    if(wakeRestartTimer) clearTimeout(wakeRestartTimer);
-    wakeRestartTimer=setTimeout(()=>{
-      wakeRestartTimer=null;
-      startWakeEngine();
-    },Math.max(0,delay));
-  }
-
-  function armWakeEngine(reason='manual gesture'){
-    if(!SR){
-      wakeEvent('unavailable · SpeechRecognition not exposed');
+    isWakeToken(token) {
+      const t = this.normalize(token);
+      if (!t) return false;
+      if (WAKE_WORDS.includes(t)) return true;
+      if (['max', 'maks', 'macks', 'maxy', 'maxie', 'mex', 'macs'].includes(t)) return true;
+      if (t.length >= 2 && t.length <= 6) {
+        const target = 'max';
+        let prev = [0, 1, 2, 3];
+        for (let i = 1; i <= t.length; i++) {
+          const cur = [i];
+          for (let j = 1; j <= target.length; j++) {
+            cur[j] = Math.min(cur[j - 1] + 1, prev[j] + 1, prev[j - 1] + (t[i - 1] === target[j - 1] ? 0 : 1));
+          }
+          prev = cur;
+        }
+        if (prev[3] <= 1) return true;
+      }
+      if (t.length >= 3 && t.length <= 7) {
+        const target = 'ozmo';
+        let prev = [0, 1, 2, 3, 4];
+        for (let i = 1; i <= t.length; i++) {
+          const cur = [i];
+          for (let j = 1; j <= target.length; j++) {
+            cur[j] = Math.min(cur[j - 1] + 1, prev[j] + 1, prev[j - 1] + (t[i - 1] === target[j - 1] ? 0 : 1));
+          }
+          prev = cur;
+        }
+        if (prev[4] <= 1) return true;
+      }
       return false;
     }
-    wakeArmed=true;
-    wakeCommandArmed=false;
-    wakeCommandStartedAt=0;
-    wakeEvent('armed · '+reason);
-    setVoiceStatus('MAX READY · say “Max” to talk');
-    scheduleWakeEngineRestart(50);
-    return true;
-  }
 
-  function startWakeEngine(){
-    if(!wakeArmed || !SR || listening || talking || aiRequestInFlight || wakeStarting || wakeRecognition) return;
-
-    if(wakeCommandArmed && performance.now()-wakeCommandStartedAt>WAKE_COMMAND_WINDOW_MS){
-      wakeCommandArmed=false;
-      wakeCommandStartedAt=0;
-      wakeEvent('command window expired');
-    }
-
-    try{
-      const session=++wakeSession;
-      const r=new SR();
-      wakeRecognition=r;
-      wakeStarting=true;
-      r.continuous=true;
-      r.interimResults=true;
-      r.maxAlternatives=3;
-      r.lang=(navigator.language||'en-US').toLowerCase().startsWith('en-')
-        ? (navigator.language||'en-US')
-        : 'en-US';
-
-      r.onstart=()=>{
-        if(session!==wakeSession) return;
-        wakeStarting=false;
-        wakeEvent('listener active');
-        if(!listening && !talking){
-          setVoiceStatus(wakeCommandArmed
-            ? 'MAX ACTIVE · speak your command'
-            : 'MAX ACTIVE · say “Max”');
+    parseWakeUtterance(text) {
+      const clean = this.normalize(text);
+      if (!clean) return { woken: false, command: '' };
+      const tokens = clean.split(' ');
+      let wakeIndex = -1;
+      for (let i = 0; i < tokens.length; i++) {
+        if (['hey', 'hi', 'hello', 'ok', 'okay', 'yo'].includes(tokens[i])) continue;
+        if (this.isWakeToken(tokens[i])) {
+          wakeIndex = i;
+          break;
         }
-      };
+      }
+      if (wakeIndex < 0) return { woken: false, command: '' };
 
-      r.onspeechstart=()=>{
-        if(session!==wakeSession) return;
-        wakeEvent('speech heard · listening for Max');
-      };
-
-      r.onresult=(e)=>{
-        if(session!==wakeSession) return;
-
-        let finalText='';
-        let interimText='';
-        for(let i=e.resultIndex;i<e.results.length;i++){
-          const result=e.results[i];
-          const alt=result?.[0];
-          const tx=String(alt?.transcript||'').trim();
-          if(!tx) continue;
-          if(result.isFinal) finalText+=(finalText?' ':'')+tx;
-          else interimText+=(interimText?' ':'')+tx;
-        }
-
-        const text=(finalText||interimText).trim();
-        if(!text) return;
-        wakeTranscriptBuffer=text;
-        wakeTranscriptBufferAt=performance.now();
-
-        if(!wakeCommandArmed){
-          const parsed=parseWakeUtterance(text);
-          if(!parsed.woken) return;
-
-          wakeLastPhraseAt=Date.now();
-          wakeEvent('wake phrase detected',{
-            text,
-            inlineCommand:Boolean(parsed.command)
-          });
-
-          // Fast inline command execution (e.g. "Max what is 2+2", "tell me a story Max")
-          if(parsed.command){
-            wakeCommandArmed=false;
-            wakeCommandStartedAt=0;
-            conversationActive=true;
-            stopWakeEngine('inline wake command');
-            setState('listening','Max heard: ' + parsed.command);
-            showCaption('MAX HEARS\n' + parsed.command, true);
-            setTimeout(()=>respond(parsed.command), 40);
-            return;
-          }
-
-          // User said "Max" without inline command:
-          // Perk up, alert eyes, and immediately start STT listener to capture question!
-          stopWakeEngine('wake phrase');
-          wakeCommandArmed=false;
-          wakeCommandStartedAt=0;
-          conversationActive=true;
-          setState('listening','Max active · listening');
-          showCaption('MAX ACTIVE\nListening to you…', true);
-          setTimeout(()=>{
-            startSTT(false);
-          }, 60);
-          return;
-        }
-
-        if(performance.now()-wakeCommandStartedAt>WAKE_COMMAND_WINDOW_MS){
-          wakeCommandArmed=false;
-          wakeCommandStartedAt=0;
-          wakeEvent('command window expired');
-          return;
-        }
-
-        if(finalText){
-          const rawCommand=finalText.trim();
-          const parsedCommand=parseWakeUtterance(rawCommand);
-          const command=parsedCommand.woken ? parsedCommand.command : rawCommand;
-          if(command && !WAKE_WORDS.includes(command.toLowerCase())){
-            wakeCommandArmed=false;
-            wakeCommandStartedAt=0;
-            stopWakeEngine('command received');
-            setTimeout(()=>respond(command),40);
-          }
-        }
-      };
-
-      r.onerror=(e)=>{
-        if(session!==wakeSession) return;
-        const code=e?.error||'unknown';
-        wakeEvent('listener error',{code});
-        wakeRecognition=null;
-        wakeStarting=false;
-
-        if(code==='not-allowed'||code==='service-not-allowed'){
-          wakeArmed=false;
-          wakeCommandArmed=false;
-          setVoiceStatus('WAKE OFF · microphone permission required');
-          return;
-        }
-
-        scheduleWakeEngineRestart(code==='no-speech' ? 100 : 350);
-      };
-
-      r.onend=()=>{
-        if(session!==wakeSession) return;
-        wakeRecognition=null;
-        wakeStarting=false;
-        wakeEvent('listener ended');
-
-        if(wakeArmed && !listening && !talking && !aiRequestInFlight && !wakePausedForSpeech){
-          scheduleWakeEngineRestart(250);
-        }
-      };
-
-      wakeEvent('starting listener');
-      r.start();
-    }catch(err){
-      wakeRecognition=null;
-      wakeStarting=false;
-      wakeEvent('start failed',{
-        name:err?.name||'unknown',
-        message:err?.message||String(err)
+      const commandTokens = tokens.filter((tok, idx) => {
+        if (idx === wakeIndex) return false;
+        if (idx < wakeIndex && ['hey', 'hi', 'hello', 'ok', 'okay', 'yo'].includes(tok)) return false;
+        return true;
       });
-
-      if(err?.name==='NotAllowedError'||err?.name==='SecurityError'){
-        wakeArmed=false;
-        setVoiceStatus('WAKE OFF · browser blocked background microphone');
-      }else{
-        scheduleWakeEngineRestart(600);
-      }
-    }
-  }
-
-  function wakeAfterSpeechEnd(){
-    clearTimeout(wakePausedWatchdog);
-    wakePausedForSpeech=false;
-    if(wakeAwaitingCommand){
-      wakeAwaitingCommand=false;
-      wakeCommandArmed=true;
-      wakeCommandStartedAt=performance.now();
-      if(wakeArmed && !listening && !talking && !aiRequestInFlight){
-        setTimeout(()=>startSTT(true),100);
-      }
-      return;
+      const command = commandTokens.join(' ').trim();
+      return { woken: true, command };
     }
 
-    // ACTIVE TOPIC CONTINUOUS CONVERSATION:
-    // Max remains actively listening for the user's follow-up on that topic!
-    if(conversationActive && !listening && !talking && !aiRequestInFlight){
+    arm(reason = 'gesture') {
+      if (!SR) {
+        log('VOICE · SpeechRecognition not supported in this browser');
+        return false;
+      }
+      this.armed = true;
+      log('VOICE · engine armed · ' + reason);
+      this.scheduleRestart(50);
+      return true;
+    }
+
+    start() {
+      if (!this.armed || !SR || this.starting || this.running) return;
+      if (talking || aiRequestInFlight) return;
+
+      try {
+        const session = ++this.session;
+        this.starting = true;
+        const r = new SR();
+        this.recognition = r;
+        r.continuous = true;
+        r.interimResults = true;
+        r.maxAlternatives = 3;
+        const browserLang = (navigator.language || 'en-US').toLowerCase();
+        r.lang = browserLang.startsWith('en-') ? browserLang : 'en-US';
+
+        r.onstart = () => {
+          if (session !== this.session) return;
+          this.starting = false;
+          this.running = true;
+          log('VOICE · listener active session #' + session);
+          this.syncUI();
+        };
+
+        r.onaudiostart = () => {
+          if (session !== this.session) return;
+          if (this.mode === VoiceMode.ACTIVE_LISTENING || this.mode === VoiceMode.ACTIVE_CONVERSATION) {
+            setVoiceStatus('MIC ACTIVE · STT LISTENING');
+          }
+        };
+
+        r.onspeechstart = () => {
+          if (session !== this.session) return;
+          this.lastSpeechAt = performance.now();
+          if (this.mode === VoiceMode.STANDBY_WAKE) {
+            log('VOICE · speech heard · listening for Max');
+          } else {
+            log('VOICE · speech detected');
+            setVoiceStatus('VOICE DETECTED · TRANSCRIBING');
+          }
+        };
+
+        r.onresult = (e) => {
+          if (session !== this.session) return;
+          this.handleResults(e);
+        };
+
+        r.onerror = (e) => {
+          if (session !== this.session) return;
+          this.handleError(e);
+        };
+
+        r.onend = () => {
+          if (session !== this.session) return;
+          this.handleEnd();
+        };
+
+        r.start();
+      } catch (err) {
+        this.starting = false;
+        this.running = false;
+        this.recognition = null;
+        log('VOICE · start error · ' + (err?.message || err?.name || err));
+        if (err?.name === 'NotAllowedError' || err?.name === 'SecurityError') {
+          this.armed = false;
+          setVoiceStatus('MIC BLOCKED · permission required');
+        } else {
+          this.scheduleRestart(600);
+        }
+      }
+    }
+
+    handleResults(e) {
+      if (talking || this.mode === VoiceMode.SPEAKING) {
+        return;
+      }
+      if (performance.now() - this.lastSpokenEndedAt < 400) {
+        return;
+      }
+
+      let finalText = '';
+      let interimText = '';
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const res = e.results[i];
+        const alt = res && res[0];
+        if (!alt) continue;
+        const tx = String(alt.transcript || '').trim();
+        if (!tx) continue;
+        if (res.isFinal) finalText += (finalText ? ' ' : '') + tx;
+        else interimText += (interimText ? ' ' : '') + tx;
+      }
+
+      const spoken = (finalText || interimText).trim();
+      if (!spoken) return;
+      this.lastSpeechAt = performance.now();
+      this.transcriptBuffer = spoken;
+
+      // MODE 1: STANDBY WAKE
+      if (this.mode === VoiceMode.STANDBY_WAKE) {
+        const parsed = this.parseWakeUtterance(spoken);
+        if (!parsed.woken) return;
+
+        log('VOICE · wake phrase detected', { spoken, command: parsed.command });
+
+        if (parsed.command) {
+          this.setMode(VoiceMode.THINKING);
+          setState('listening', 'Max heard: ' + parsed.command);
+          showCaption('MAX HEARS\n' + parsed.command, true);
+          setTimeout(() => respond(parsed.command), 40);
+          return;
+        }
+
+        this.setMode(VoiceMode.ACTIVE_LISTENING);
+        setState('listening', 'Max active · listening');
+        showCaption('MAX ACTIVE\nListening to you…', true);
+        setVoiceStatus('MAX LISTENING · speak your command…');
+        return;
+      }
+
+      // MODE 2 & 3: ACTIVE_LISTENING or ACTIVE_CONVERSATION
+      if (this.mode === VoiceMode.ACTIVE_LISTENING || this.mode === VoiceMode.ACTIVE_CONVERSATION) {
+        showCaption('MAX HEARS\n' + spoken, true);
+        if (devTranscript) devTranscript.textContent = spoken;
+        if (devStage) devStage.textContent = finalText ? 'FINAL TRANSCRIPT' : 'TRANSCRIBING…';
+
+        clearTimeout(this.silenceTimer);
+
+        if (finalText) {
+          const query = finalText;
+          this.setMode(VoiceMode.THINKING);
+          setState('thinking', 'thinking · processing your words');
+          setTimeout(() => respond(query), 120);
+          return;
+        }
+
+        // Smart VAD: if user pauses for 1.4s after speaking words
+        this.silenceTimer = setTimeout(() => {
+          if ((this.mode === VoiceMode.ACTIVE_LISTENING || this.mode === VoiceMode.ACTIVE_CONVERSATION) && spoken) {
+            log('VOICE · silence pause detected · dispatching buffered utterance');
+            this.setMode(VoiceMode.THINKING);
+            setState('thinking', 'thinking · processing your words');
+            respond(spoken);
+          }
+        }, 1400);
+      }
+    }
+
+    handleError(e) {
+      const code = e && e.error ? e.error : 'unknown';
+      this.lastErrorCode = code;
+      this.starting = false;
+      this.running = false;
+      this.recognition = null;
+      log('VOICE · listener error · ' + code);
+
+      if (code === 'not-allowed' || code === 'service-not-allowed') {
+        this.armed = false;
+        setVoiceStatus('MIC BLOCKED · permission required');
+        return;
+      }
+
+      const delay = code === 'no-speech' ? 120 : (code === 'network' ? 600 : 350);
+      this.scheduleRestart(delay);
+    }
+
+    handleEnd() {
+      this.starting = false;
+      this.running = false;
+      this.recognition = null;
+      log('VOICE · recognition session ended');
+
+      if (!this.armed) return;
+      if (talking || aiRequestInFlight) return;
+
+      const delay = (this.mode === VoiceMode.ACTIVE_CONVERSATION || this.mode === VoiceMode.ACTIVE_LISTENING) ? 100 : 250;
+      this.scheduleRestart(delay);
+    }
+
+    scheduleRestart(delay = 250) {
+      if (!this.armed) return;
+      if (talking || aiRequestInFlight) return;
+      clearTimeout(this.restartTimer);
+      this.restartTimer = setTimeout(() => {
+        this.restartTimer = null;
+        this.start();
+      }, Math.max(20, delay));
+    }
+
+    setMode(newMode) {
+      this.mode = newMode;
+      log('VOICE · mode changed to ' + newMode);
+      clearTimeout(this.silenceTimer);
+      clearTimeout(this.conversationTimeoutTimer);
+
+      if (newMode === VoiceMode.ACTIVE_CONVERSATION) {
+        this.conversationTimeoutTimer = setTimeout(() => {
+          if (this.mode === VoiceMode.ACTIVE_CONVERSATION) {
+            log('VOICE · conversation window expired · returning to standby');
+            this.setMode(VoiceMode.STANDBY_WAKE);
+            setState('curious', 'curious · standing by');
+            setVoiceStatus('MAX READY · say “Max” to talk');
+          }
+        }, this.CONVERSATION_WINDOW_MS);
+      }
+
+      this.syncUI();
+    }
+
+    onSpeechStarted() {
+      this.setMode(VoiceMode.SPEAKING);
+    }
+
+    onSpeechFinished() {
+      this.lastSpokenEndedAt = performance.now();
+      this.setMode(VoiceMode.ACTIVE_CONVERSATION);
       setVoiceStatus('MAX LISTENING · speak your follow-up…');
       setState('listening', 'Max listening on active topic…');
       showCaption('MAX LISTENING\nListening to your follow-up…', true);
-      clearTimeout(conversationSilenceWatchdog);
-      conversationSilenceWatchdog = setTimeout(() => {
-        if(conversationActive && !listening && !talking && !aiRequestInFlight){
-          conversationActive = false;
-          setVoiceStatus('MAX READY · say “Max” to talk');
-          setState('curious', 'curious · standing by');
-          scheduleWakeEngineRestart(150);
-        }
-      }, CONVERSATION_TIMEOUT_MS);
 
-      setTimeout(() => {
-        if(conversationActive && !listening && !talking && !aiRequestInFlight){
-          startSTT(false);
-        }
-      }, 220);
-      return;
+      if (!this.running && !this.starting) {
+        this.start();
+      }
     }
 
-    if(wakeArmed && !listening && !talking && !aiRequestInFlight){
-      wakeCommandArmed=false;
-      wakeCommandStartedAt=0;
-      scheduleWakeEngineRestart(250);
+    triggerManualListening() {
+      this.arm('manual mic click');
+      this.setMode(VoiceMode.ACTIVE_LISTENING);
+      setState('listening', 'Max listening · capturing speech');
+      setVoiceStatus('MIC ACTIVE · speak now…');
+      showCaption('MAX LISTENING\nSpeak now…', true);
+      if (!this.running && !this.starting) {
+        this.start();
+      }
     }
-  }
 
-  // Wake Engine Liveness Watchdog Heartbeat: ensures listener is never left dead
-  setInterval(()=>{
-    if(wakeArmed && !listening && !talking && !aiRequestInFlight && !wakePausedForSpeech && !wakeStarting && !wakeRecognition){
-      startWakeEngine();
+    stop(reason = 'stopped') {
+      log('VOICE · stop · ' + reason);
+      this.starting = false;
+      this.running = false;
+      clearTimeout(this.restartTimer);
+      clearTimeout(this.silenceTimer);
+      clearTimeout(this.conversationTimeoutTimer);
+      if (this.recognition) {
+        try { this.recognition.abort(); } catch (_) {}
+        this.recognition = null;
+      }
+      this.setMode(VoiceMode.STANDBY_WAKE);
     }
-  },1800);
 
-  function armWakeFromUserGesture(){
-    armWakeEngine('user gesture');
-  }
-
-  function sttEventForStart(message){
-    log('STT · '+message);
-  }
-
-  function buildRecognition(){
-    if(!SR) return null;
-    const r=new SR();
-    r.continuous=false;
-    r.interimResults=true;
-    r.maxAlternatives=3;
-    const browserLang=(navigator.language||'en-US').toLowerCase();
-    r.lang=browserLang.startsWith('en-') ? browserLang : 'en-US';
-
-    /* Some newer engines expose local recognition. We only opt in when the
-       browser explicitly reports that the language is available; otherwise
-       the normal Chrome recognition service remains the fallback. */
-    try{
-      if('processLocally' in r && typeof SR.available==='function'){
-        SR.available({langs:['en-US'],processLocally:true}).then(result=>{
-          const ok=result==='available' || (Array.isArray(result)&&result.includes('available'));
-          if(ok){ r.processLocally=true; log('STT · on-device recognition available'); }
-          else log('STT · on-device recognition unavailable · using Chrome service');
-        }).catch(()=>log('STT · on-device availability check failed · using Chrome service'));
+    syncUI() {
+      listening = (this.mode === VoiceMode.ACTIVE_LISTENING || this.mode === VoiceMode.ACTIVE_CONVERSATION);
+      if (devWake) {
+        devWake.textContent = this.armed ? (this.running ? this.mode : 'STARTING') : 'OFF';
       }
-    }catch(_){ }
-
-    const sttEvent=(name,detail='')=>log('STT · '+name+(detail?' · '+detail:''));
-    r.onaudiostart=()=>{sttHadSpeech=false;sttEvent('audio start');setVoiceStatus('MIC ACTIVE · STT LISTENING');};
-    r.onsoundstart=()=>{sttEvent('sound detected');setVoiceStatus('SOUND DETECTED · STT ACTIVE');};
-    r.onspeechstart=()=>{sttHadSpeech=true;sttEvent('speech detected');setVoiceStatus('VOICE DETECTED · TRANSCRIBING');};
-    r.onspeechend=()=>{sttEvent('speech ended');};
-    r.onsoundend=()=>{sttEvent('sound ended');};
-    r.onaudioend=()=>{sttEvent('audio ended');};
-    r.onnomatch=()=>{
-      sttNoMatch=true;
-      sttEvent('NO MATCH · speech detected but no words recognized');
-      log('STT · no-match diagnostic · lang='+r.lang+' · onDevice='+(r.processLocally===true?'true':'false'));
-      setVoiceStatus('STT NO MATCH · Chrome heard speech but returned no words');
-      if(devStage)devStage.textContent='NO MATCH · NO TRANSCRIPT';
-    };
-
-    r.onstart=()=>{
-      listening=true; sttStarting=false; sttHadResult=false; sttHadSpeech=false; sttLastErrorCode=''; sttNoMatch=false;
-      clearTimeout(sttStartingWatchdog);
-      clearTimeout(sttWatchdog);
-      sttWatchdog=setTimeout(()=>{
-        if(listening && sttHadSpeech && !sttHadResult){
-          sttEvent('WATCHDOG · speech detected but no transcript after 12s');
-          setVoiceStatus('STT WAITING · Chrome heard you but has not returned text');
-        }
-      },12000);
-      micBtn.classList.add('listening');
-      setState('listening','listening · capturing speech');
-      setVoiceStatus('MIC ACTIVE · STT LISTENING');
-      sttEvent('session start #'+sttSession);
-    };
-
-    r.onresult=(e)=>{
-      sttHadResult=true;
-      let interim='',finalText='';
-      const changed=[];
-      for(let i=e.resultIndex;i<e.results.length;i++){
-        const result=e.results[i];
-        const alt=result && result[0];
-        if(!alt) continue;
-        const tx=(alt.transcript||'').trim();
-        if(tx) changed.push({index:i,final:!!result.isFinal,text:tx,confidence:Number(alt.confidence||0)});
-        if(result.isFinal) finalText+=(tx?' '+tx:''); else interim+=(tx?' '+tx:'');
-      }
-      finalText=finalText.trim(); interim=interim.trim();
-      const text=(finalText||interim).trim();
-      if(text){
-        const first=changed[0]||{};
-        sttEvent(first.final?'FINAL RESULT': 'INTERIM RESULT',text+' · confidence '+(first.confidence||0).toFixed(3));
-        showCaption('MAX HEARS\n'+text,true);
-        if(devTranscript) devTranscript.textContent=text;
-        if(devStage) devStage.textContent=first.final?'FINAL TRANSCRIPT RECEIVED':'INTERIM TRANSCRIPT RECEIVED';
-      }
-      if(finalText){
-        const q=finalText;
-        setState('thinking','thinking · processing your words');
-        setTimeout(()=>respond(q),350);
-      }
-    };
-
-    r.onerror=(e)=>{
-      listening=false; sttStarting=false; micBtn.classList.remove('listening');
-      clearTimeout(sttStartingWatchdog);
-      clearTimeout(sttWatchdog);
-      const code=e&&e.error?e.error:'unknown';
-      sttLastErrorCode=code;
-      sttEvent('ERROR',code+(e&&e.message?' · '+e.message:''));
-      setState('confused','voice · '+code);
-      const messages={
-        'not-allowed':'STT ERROR · microphone permission blocked',
-        'service-not-allowed':'STT ERROR · speech service unavailable',
-        'no-speech':'STT ERROR · no speech detected',
-        'audio-capture':'STT ERROR · microphone unavailable',
-        'network':'STT ERROR · speech service network failure',
-        'aborted':'STT stopped · tap mic to try again',
-        'language-not-supported':'STT ERROR · language not supported'
-      };
-      setVoiceStatus(messages[code]||('STT ERROR · '+code));
-      if(code==='audio-capture'||code==='not-allowed'){
-        releaseMicForSTT();
-        $('#mediaText').textContent='MIC ERROR';
-      }
-      // Android Chrome can report audio-capture while its Google speech
-      // service is still releasing the previous recorder. One delayed retry
-      // is safe; repeated automatic retries are not.
-      if(code==='audio-capture' && !sttRetryUsed){
-        sttRetryUsed=true;
-        setVoiceStatus('STT HANDOFF · releasing Google audio recorder…');
-        setTimeout(()=>startSTT(true),700);
-        return;
-      }
-      hideCaption(6000);
-    };
-
-    r.onend=()=>{
-      listening=false; sttStarting=false; micBtn.classList.remove('listening');
-      clearTimeout(sttStartingWatchdog);
-      clearTimeout(sttWatchdog);
-      releaseMicForSTT();
-      sttEvent('ended');
-      if(sttHadSpeech && !sttHadResult && !sttNoMatch && !sttLastErrorCode){
-        sttEvent('NO RESULT · Chrome detected speech but returned no transcript');
-        setVoiceStatus('STT NO RESULT · speech detected, transcript not returned');
-        if(devStage) devStage.textContent='SPEECH DETECTED · NO TRANSCRIPT';
-        /* One clean retry catches stale Chrome recognition sessions without
-           creating an endless restart loop. */
-        if(!sttRetryUsed){
-          sttRetryUsed=true;
-          setTimeout(()=>startSTT(true),450);
-          return;
-        }
-      }
-      sttRetryUsed=false;
-      if(!sttHadResult && conversationActive && !aiRequestInFlight && !talking){
-        conversationActive=false;
-        clearTimeout(conversationSilenceWatchdog);
-        setVoiceStatus('MAX READY · say “Max” to talk');
-        if(state==='listening') setState('curious','curious · standing by');
-        if(wakeArmed) scheduleWakeEngineRestart(300);
-        return;
-      }
-      if(!talking && state==='listening') setState('curious','curious · standing by');
-      if(wakeArmed && !talking && !aiRequestInFlight) scheduleWakeEngineRestart(450);
-    };
-    return hookRecognitionDiagnostics(r);
-  }
-
-  if(SR) recognition=buildRecognition();
-
-  async function startSTT(isRetry=false){
-    if(!SR){setVoiceStatus('STT UNAVAILABLE · Chrome SpeechRecognition not exposed');return;}
-    if(listening) return;
-
-    // Reset sttStarting if it hung
-    sttStarting=false;
-    clearTimeout(sttStartingWatchdog);
-
-    stopWakeEngine('manual STT handoff');
-    wakeCommandArmed=false;
-    wakeCommandStartedAt=0;
-    wakePausedForSpeech=false;
-    wakeAwaitingCommand=false;
-
-    try{
-      sttSession++;
-      if(!isRetry) sttRetryUsed=false;
-      if(recognition){try{recognition.abort();}catch(_){}}
-      recognition=buildRecognition();
-      sttStarting=true;
-      clearTimeout(sttStartingWatchdog);
-      sttStartingWatchdog=setTimeout(()=>{
-        if(sttStarting && !listening){
-          sttStarting=false;
-          micBtn.classList.remove('listening');
-          log('STT · start timeout · ready for tap');
-        }
-      },2200);
-
-      // Stop TTS and every getUserMedia audio resource before asking Google
-      // SpeechRecognition for the microphone.
-      stopRoboAudio('STT requested');
-      if('speechSynthesis' in window) speechSynthesis.cancel();
-      releaseMicForSTT();
-
-      setVoiceStatus(isRetry?'STT RETRY · speak now…':'STT STARTING · speak now…');
-
-      if(talking){
-        talking=false;
-        micBtn.classList.remove('talking');
-      }
-
-      sttEventForStart('calling SpeechRecognition.start()');
-      recognition.start();
-    }catch(e){
-      sttStarting=false;
-      clearTimeout(sttStartingWatchdog);
-      console.warn(e);
-      log('STT start exception · '+(e?.name||'unknown')+' · '+(e?.message||''));
-
-      releaseMicForSTT();
-
-      const msg=e?.name==='InvalidStateError'
-        ? 'STT BUSY · tap mic again'
-        : 'STT START FAILED · '+(e?.message||e?.name||'unknown error');
-      setVoiceStatus(msg);
-      hideCaption(4000);
-      if(wakeArmed && e?.name!=='NotAllowedError' && e?.name!=='SecurityError'){
-        scheduleWakeEngineRestart(800);
+      if (this.mode === VoiceMode.STANDBY_WAKE) {
+        micBtn.classList.remove('listening');
+      } else if (this.mode === VoiceMode.ACTIVE_LISTENING || this.mode === VoiceMode.ACTIVE_CONVERSATION) {
+        micBtn.classList.add('listening');
       }
     }
   }
+
+  const voiceEngine = new UnifiedVoiceEngine();
+
+  // Backward-compatible global wrappers
+  let wakeArmed = true;
+  let wakeRecognition = null;
+  function armWakeEngine(reason = 'manual gesture') {
+    wakeArmed = true;
+    return voiceEngine.arm(reason);
+  }
+  function startWakeEngine() {
+    voiceEngine.start();
+  }
+  function stopWakeEngine(reason = 'stopped') {
+    voiceEngine.stop(reason);
+  }
+  function scheduleWakeEngineRestart(delay = 250) {
+    voiceEngine.scheduleRestart(delay);
+  }
+  function wakeAfterSpeechEnd() {
+    voiceEngine.onSpeechFinished();
+  }
+  function startSTT(isRetry = false) {
+    voiceEngine.triggerManualListening();
+  }
+  function armWakeFromUserGesture() {
+    voiceEngine.arm('user gesture');
+  }
+  function parseWakeUtterance(text) {
+    return voiceEngine.parseWakeUtterance(text);
+  }
+
+  // Liveness Watchdog Heartbeat: guarantees listener is never left dead
+  setInterval(() => {
+    if (voiceEngine.armed && !voiceEngine.running && !voiceEngine.starting && !talking && !aiRequestInFlight) {
+      voiceEngine.start();
+    }
+  }, 2000);
 
 
   /* ---------- AI brain (v2.12) ----------
@@ -6376,8 +6230,9 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
       log('TTS · ElevenLabs speech start');
       ttsDiag('ElevenLabs speech start');
       talking=true;
+      voiceEngine.onSpeechStarted();
       micBtn.classList.add('talking');
-      setState('talking','talking · Robo is speaking',{behavioral:true});
+      setState('talking','talking · Max is speaking',{behavioral:true});
     };
 
     audio.onended=()=>{
@@ -6434,8 +6289,9 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
       if(token!==roboSpeechToken) return;
       log('TTS · browser fallback speech start');
       talking=true;
+      voiceEngine.onSpeechStarted();
       micBtn.classList.add('talking');
-      setState('talking','talking · Robo is speaking',{behavioral:true});
+      setState('talking','talking · Max is speaking',{behavioral:true});
     };
 
     u.onend=()=>{
@@ -6487,7 +6343,7 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
     log('TTS · response queued · ElevenLabs');
     ttsDiag('response queued · ElevenLabs');
     console.info('[ROBO TTS DEBUG] speak() entered', clean);
-    showCaption('ROBO SAYS\n'+clean,true);
+    showCaption('MAX SAYS\n'+clean,true);
 
     try{
       const played=elevenLabsQuotaExhausted ? false : await speakWithElevenLabs(clean,token,ttsLanguage);
@@ -6506,23 +6362,21 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
     speakWithBrowserFallback(clean,token,ttsLanguage);
   }
 
-  micBtn.addEventListener('click',async()=>{
-    lastActivity=performance.now();
+  micBtn.addEventListener('click', async () => {
+    lastActivity = performance.now();
     armWakeFromUserGesture();
-    if('speechSynthesis' in window) speechSynthesis.cancel();
+    if ('speechSynthesis' in window) speechSynthesis.cancel();
 
-    // If already listening or starting, tap acts as an immediate clean stop
-    if(listening || sttStarting){
-      listening=false;
-      sttStarting=false;
-      micBtn.classList.remove('listening');
-      clearTimeout(sttStartingWatchdog);
-      try{recognition?.abort();}catch(_){}
-      setVoiceStatus('MIC OFF · tap to speak', 2000);
+    // If already actively listening or in conversation, tap returns cleanly to standby
+    if (voiceEngine.mode === VoiceMode.ACTIVE_LISTENING || voiceEngine.mode === VoiceMode.ACTIVE_CONVERSATION) {
+      voiceEngine.setMode(VoiceMode.STANDBY_WAKE);
+      setState('curious', 'curious · standing by');
+      setVoiceStatus('MAX READY · say “Max” to talk', 2000);
       return;
     }
 
-    await startSTT(false);
+    // Otherwise, tap initiates instant manual active listening!
+    voiceEngine.triggerManualListening();
   });
 
   /* ---------- Voice diagnostic button behavior ---------- */
@@ -6556,7 +6410,7 @@ if(devCamera)devCamera.textContent=navigator.mediaDevices?.getUserMedia?"API REA
 if(devMic)devMic.textContent=navigator.mediaDevices?.getUserMedia?"API READY":"UNAVAILABLE";
 if(devMicPermission)devMicPermission.textContent="UNKNOWN · tap CAMERA or MIC";
 if(devLocalStt)devLocalStt.textContent=(window.SpeechRecognition&&"processLocally" in window.SpeechRecognition.prototype)?"SUPPORTED API":"NOT EXPOSED";
-if(devWake)devWake.textContent=wakeArmed?(wakeRecognition?"LISTENING":"ARMED · STARTING"):"OFF";
+if(devWake)devWake.textContent=voiceEngine.armed?(voiceEngine.running?"LISTENING":"ARMED · STARTING"):"OFF";
 async function refreshMicPermissionDiagnostic(){
   if(!devMicPermission)return;
   try{
