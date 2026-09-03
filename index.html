@@ -517,6 +517,7 @@ button{font:inherit}
   let motorSafetyWatchdog = null;
   let virtualRobot = null;
   let esp32Hardware = null;
+  let esp32Wifi = null;
   let robotConnectionManager = null;
   let robotActionEngine = null;
   let autonomousPlanner = null;
@@ -1536,7 +1537,7 @@ button{font:inherit}
       `Hey ${name}! Look who showed up! Ready to roll?`
     ];
     const phrase = greetings[Math.floor(Math.random() * greetings.length)];
-    showCaption(`ROBO SEES YOU\nHey ${name}!`, true);
+    showCaption(`MAX SEES YOU\nHey ${name}!`, true);
     speak(phrase, 'en');
   }
 
@@ -3886,6 +3887,13 @@ button{font:inherit}
   let isDoubleBlink = false;
   let t = 0;
 
+  // Live Gaze Tracking (Module 2 ↔ Module 8)
+  let gazeX = 0;          // Current smoothed horizontal gaze [-1.0 (left), 1.0 (right)]
+  let gazeY = 0;          // Current smoothed vertical gaze [-1.0 (up), 1.0 (down)]
+  let targetGazeX = 0;    // Target gaze direction
+  let targetGazeY = 0;
+  let lastSaccadeAt = 0;  // Natural micro-saccades during idle
+
   const SERVICE_UUID = "0000ffe0-0000-1000-8000-00805f9b34fb";
   const CHAR_UUID = "0000ffe1-0000-1000-8000-00805f9b34fb";
 
@@ -4032,9 +4040,12 @@ button{font:inherit}
     ctx.closePath();
   }
 
-  function drawDomeEye(ctx, ex, ey_center, ew, eh, cr, browSlant, happyBlend, side) {
+  function drawDomeEye(ctx, ex, ey_center, ew, eh, cr, browSlant, happyBlend, side, gX = 0, gY = 0) {
     ctx.save();
-    ctx.translate(ex, ey_center);
+    // Gaze tracking offset (Module 2 ↔ Module 8)
+    const gazeShiftX = gX * (ew * 0.12);
+    const gazeShiftY = gY * (eh * 0.10);
+    ctx.translate(ex + gazeShiftX, ey_center + gazeShiftY);
 
     // Brow slant (tilts eyes for angry, alert, sad, confused)
     if (browSlant !== 0) {
@@ -4092,12 +4103,12 @@ button{font:inherit}
         // Subtle glossy shimmer along the smiling crescent
         ctx.fillStyle = `rgba(255, 255, 255, ${glareAlpha * 0.55 * happyBlend})`;
         ctx.beginPath();
-        ctx.ellipse(halfW * 0.15, -halfH * 0.25, ew * 0.16, Math.max(2, eh * 0.08), -0.1, 0, Math.PI * 2);
+        ctx.ellipse(halfW * 0.15 + gX * (ew * 0.04), -halfH * 0.25 + gY * (eh * 0.04), ew * 0.16, Math.max(2, eh * 0.08), -0.1, 0, Math.PI * 2);
         ctx.fill();
       } else {
-        // High-end companion robot primary specular glare (upper-right rounded highlight)
-        const gx = halfW * 0.26;
-        const gy = -halfH * 0.40;
+        // High-end companion robot primary specular glare (tracks gaze position)
+        const gx = halfW * 0.26 + gX * (ew * 0.06);
+        const gy = -halfH * 0.40 + gY * (eh * 0.06);
         const gw = ew * 0.22;
         const gh = Math.max(3, eh * 0.18);
 
@@ -4287,6 +4298,42 @@ button{font:inherit}
       // Clear canvas (pure black background)
       ctx.clearRect(0, 0, cw, ch);
 
+      // Module 2 ↔ Module 8: Live Gaze Tracking
+      // If a human face is currently tracked by the camera, look directly at their face!
+      const hasTrackedFace = Boolean(
+        activeFaceTarget?.box &&
+        isValidFaceBox(activeFaceTarget.box) &&
+        (performance.now() - (activeFaceTarget.lastSeenAt || 0) < 1800)
+      );
+
+      if (hasTrackedFace) {
+        const box = activeFaceTarget.box;
+        // box coords are normalized 0-100:
+        // camera is mirrored on mobile user-facing view, so invert X for natural eye contact:
+        const faceNormX = ((box.left + box.width / 2) - 50) / 32;
+        const faceNormY = ((box.top + box.height / 2) - 45) / 30;
+        targetGazeX = Math.max(-1.0, Math.min(1.0, -faceNormX)); // look towards person
+        targetGazeY = Math.max(-0.75, Math.min(0.75, faceNormY));
+      } else {
+        // Organic idle micro-saccades (natural companion eye glances every 2.5–4.5s)
+        const nowMs = performance.now();
+        if (nowMs - lastSaccadeAt > (isCurious ? 2200 : 3800)) {
+          lastSaccadeAt = nowMs;
+          if (Math.random() < 0.65) {
+            targetGazeX = (Math.random() - 0.5) * (isCurious ? 0.75 : 0.40);
+            targetGazeY = (Math.random() - 0.5) * 0.35;
+          } else {
+            targetGazeX = 0; // return gaze forward
+            targetGazeY = 0;
+          }
+        }
+      }
+
+      // Smooth gaze tracking response (natural eye inertia damping)
+      const gazeRate = Math.min(1, dt / 130);
+      gazeX += (targetGazeX - gazeX) * gazeRate;
+      gazeY += (targetGazeY - gazeY) * gazeRate;
+
       // Proportions matching the hardware reference image:
       // In Landscape & Portrait, make eyes and mouth LARGE, majestic and commanding
       const isLandscape = cw > ch;
@@ -4328,7 +4375,7 @@ button{font:inherit}
       ctx.shadowBlur = Math.round(ew * (0.16 + glow * 0.14));
       ctx.fillStyle = '#00e5ff';
 
-      // Left Eye (-1) and Right Eye (+1)
+      // Left Eye (-1) and Right Eye (+1) with dynamic gaze tracking
       const eyeOffset = eyeGap / 2 + ew / 2;
       [-1, 1].forEach(side => {
         const ex = cx + side * eyeOffset;
@@ -4336,7 +4383,7 @@ button{font:inherit}
         // When curious, apply subtle asymmetric focus (inquisitive head cock & eye focus)
         const curiousTiltEye = isCurious ? (side < 0 ? 1.05 : 0.95) : 1.0;
         const eh = Math.max(ew * 0.08, ehBase * eyeOpen * curiousTiltEye * (1 - blinkAmount * 0.94));
-        drawDomeEye(ctx, ex, cy, ew, eh, cr, browSlant, happyBlend, side);
+        drawDomeEye(ctx, ex, cy, ew, eh, cr, browSlant, happyBlend, side, gazeX, gazeY);
       });
 
       // Mouth: glowing pill below eyes with continuous smooth morphing
@@ -6494,10 +6541,10 @@ function runDevChecks(){
     ["Multi-person memory registry",!!(roboMemory&&Array.isArray(roboMemory.persons)&&roboMemory.persons.length>0)],
     ["Active identity resolver",typeof findFaceMatch==="function"&&typeof setActivePerson==="function"],
     ["Live face → social coupling",typeof deriveLiveSocialFromFaces==="function"],
-    ["Module 10 intent & action engine", Boolean(typeof robotActionEngine !== 'undefined' && robotActionEngine)],
-    ["Module 11 planning & autonomy", Boolean(typeof autonomousPlanner !== 'undefined' && autonomousPlanner)],
-    ["Module 12 robot body connection", Boolean(typeof robotConnectionManager !== 'undefined' && robotConnectionManager)],
-    ["Module 13 motor safety watchdog", Boolean(typeof motorSafetyWatchdog !== 'undefined' && motorSafetyWatchdog)],
+    ["Module 10 intent & action engine", Boolean((typeof RobotActionEngine !== 'undefined') || (typeof robotActionEngine !== 'undefined' && robotActionEngine))],
+    ["Module 11 planning & autonomy", Boolean((typeof AutonomousPlanner !== 'undefined') || (typeof autonomousPlanner !== 'undefined' && autonomousPlanner))],
+    ["Module 12 robot body connection", Boolean((typeof RobotConnectionManager !== 'undefined') || (typeof robotConnectionManager !== 'undefined' && robotConnectionManager))],
+    ["Module 13 motor safety watchdog", Boolean((typeof MotorSafetyWatchdog !== 'undefined') || (typeof motorSafetyWatchdog !== 'undefined' && motorSafetyWatchdog))],
     ["Persistent memory storage",typeof localStorage!=="undefined"],
     ["Memory identity UI",!!$("#memoryIdentity")],
     ["Perception fusion",typeof updatePerceptionFusion==="function"],
@@ -6967,12 +7014,100 @@ function hookRecognitionDiagnostics(r){
     }
   }
 
+  class ESP32WebSocketConnection {
+    constructor() {
+      this.name = 'ESP32 Wi-Fi';
+      this.connected = false;
+      this.ws = null;
+      this.ip = localStorage.getItem('robo_esp32_ip') || '192.168.4.1';
+      this.port = localStorage.getItem('robo_esp32_port') || '81';
+      this.seq = 0;
+      this.battery = 100;
+      this.distanceCm = 120;
+    }
+
+    connect(ip = this.ip, port = this.port) {
+      this.ip = ip;
+      this.port = port;
+      localStorage.setItem('robo_esp32_ip', ip);
+      localStorage.setItem('robo_esp32_port', port);
+      if (this.ws) {
+        try { this.ws.close(); } catch(_) {}
+        this.ws = null;
+      }
+      const url = `ws://${this.ip}:${this.port}/ws`;
+      devLog('CHASSIS', `Connecting ESP32 WebSocket: ${url}`);
+      try {
+        this.ws = new WebSocket(url);
+        this.ws.onopen = () => {
+          this.connected = true;
+          devLog('CHASSIS', `ESP32 WebSocket Connected · ${url}`);
+          if (typeof robotConnectionManager !== 'undefined') robotConnectionManager.updateUI();
+        };
+        this.ws.onmessage = (evt) => {
+          try {
+            const data = JSON.parse(evt.data);
+            if (typeof data.distanceCm === 'number') this.distanceCm = data.distanceCm;
+            if (typeof data.battery === 'number') this.battery = data.battery;
+          } catch (_) {}
+        };
+        this.ws.onclose = () => {
+          this.connected = false;
+          devLog('CHASSIS', 'ESP32 WebSocket Disconnected');
+          if (typeof robotConnectionManager !== 'undefined') robotConnectionManager.updateUI();
+        };
+        this.ws.onerror = (err) => {
+          this.connected = false;
+          devLog('CHASSIS', 'ESP32 WebSocket Error', err);
+        };
+      } catch (e) {
+        devLog('CHASSIS', `ESP32 WebSocket Failed: ${e.message}`);
+      }
+    }
+
+    sendMotors(left, right, duration = 500) {
+      if (!this.connected || !this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+      const packet = JSON.stringify({
+        type: 'motor',
+        left,
+        right,
+        duration,
+        seq: ++this.seq
+      });
+      this.ws.send(packet);
+    }
+
+    sendHeartbeat() {
+      if (!this.connected || !this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+      const packet = JSON.stringify({ type: 'ping', seq: ++this.seq });
+      this.ws.send(packet);
+    }
+
+    stop() {
+      if (this.connected && this.ws && this.ws.readyState === WebSocket.OPEN) {
+        this.sendMotors(0, 0, 100);
+      }
+    }
+
+    getTelemetry() {
+      return {
+        mode: 'ESP32_WIFI',
+        connected: this.connected,
+        distanceCm: this.distanceCm,
+        obstacle: this.distanceCm < 15,
+        battery: this.battery,
+        status: this.connected ? 'ONLINE' : 'OFFLINE'
+      };
+    }
+  }
+
   class RobotConnectionManager {
-    constructor(watchdog, virtualConn, hardwareConn) {
+    constructor(watchdog, virtualConn, bleConn, wifiConn) {
       this.watchdog = watchdog;
       this.virtual = virtualConn;
-      this.hardware = hardwareConn;
-      this.mode = 'virtual';
+      this.ble = bleConn;
+      this.wifi = wifiConn;
+      this.mode = 'virtual'; // 'virtual' | 'wifi' | 'ble'
 
       this.watchdog.onWatchdogTrip = () => {
         this.getActiveConnection().stop();
@@ -6981,12 +7116,17 @@ function hookRecognitionDiagnostics(r){
     }
 
     getActiveConnection() {
-      return this.mode === 'virtual' ? this.virtual : this.hardware;
+      if (this.mode === 'ble') return this.ble;
+      if (this.mode === 'wifi') return this.wifi;
+      return this.virtual;
     }
 
     setMode(mode) {
       this.getActiveConnection().stop();
       this.mode = mode;
+      if (mode === 'wifi' && !this.wifi.connected) {
+        this.wifi.connect();
+      }
       this.watchdog.feedHeartbeat();
       this.updateUI();
     }
@@ -7049,7 +7189,12 @@ function hookRecognitionDiagnostics(r){
 
       const transportText = $('#chassisTransportText');
       if (transportText) {
-        transportText.textContent = `Transport: ${this.mode === 'virtual' ? 'Virtual Simulator' : 'ESP32 BLE'} (${this.mode === 'virtual' ? 'Active' : (this.hardware.connected ? 'Connected' : 'Offline')})`;
+        const modeLabel = this.mode === 'virtual'
+          ? 'Virtual Simulator (Active)'
+          : this.mode === 'wifi'
+            ? `ESP32 Wi-Fi (${this.wifi.connected ? 'Connected' : 'Offline'})`
+            : `ESP32 BLE (${this.ble.connected ? 'Connected' : 'Offline'})`;
+        transportText.textContent = `Transport: ${modeLabel}`;
       }
 
       const motorText = $('#motorPwmText');
@@ -7082,7 +7227,7 @@ function hookRecognitionDiagnostics(r){
       const modeBtn = $('#chassisModeBtn');
       if (modeBtn) {
         modeBtn.textContent = `MODE: ${this.mode.toUpperCase()}`;
-        modeBtn.classList.toggle('active', this.mode === 'virtual');
+        modeBtn.classList.toggle('active', this.mode !== 'virtual');
       }
 
       const obsBtn = $('#obstacleToggleBtn');
@@ -7096,7 +7241,8 @@ function hookRecognitionDiagnostics(r){
   motorSafetyWatchdog = new MotorSafetyWatchdog();
   virtualRobot = new VirtualRobotConnection();
   esp32Hardware = new ESP32HardwareConnection();
-  robotConnectionManager = new RobotConnectionManager(motorSafetyWatchdog, virtualRobot, esp32Hardware);
+  esp32Wifi = new ESP32WebSocketConnection();
+  robotConnectionManager = new RobotConnectionManager(motorSafetyWatchdog, virtualRobot, esp32Hardware, esp32Wifi);
 
   motorSafetyWatchdog.start();
   setInterval(() => {
@@ -7107,8 +7253,10 @@ function hookRecognitionDiagnostics(r){
 
   // Wire chassis buttons
   $('#chassisModeBtn')?.addEventListener('click', () => {
-    const next = robotConnectionManager.mode === 'virtual' ? 'hardware' : 'virtual';
-    robotConnectionManager.setMode(next);
+    const modes = ['virtual', 'wifi', 'ble'];
+    const currentIdx = modes.indexOf(robotConnectionManager.mode);
+    const nextMode = modes[(currentIdx + 1) % modes.length];
+    robotConnectionManager.setMode(nextMode);
   });
 
   $('#obstacleToggleBtn')?.addEventListener('click', () => {
@@ -7128,11 +7276,11 @@ function hookRecognitionDiagnostics(r){
     }
   });
 
-  $('#nudgeFwdBtn')?.addEventListener('click', () => robotConnectionManager.drive(40, 40, 600));
-  $('#nudgeBackBtn')?.addEventListener('click', () => robotConnectionManager.drive(-40, -40, 600));
-  $('#nudgeLeftBtn')?.addEventListener('click', () => robotConnectionManager.drive(-35, 35, 450));
-  $('#nudgeRightBtn')?.addEventListener('click', () => robotConnectionManager.drive(35, -35, 450));
-  $('#nudgeStopBtn')?.addEventListener('click', () => robotConnectionManager.stop());
+  $('#nudgeFwdBtn')?.addEventListener('click', () => robotActionEngine.forward(40, 600));
+  $('#nudgeBackBtn')?.addEventListener('click', () => robotActionEngine.backward(40, 600));
+  $('#nudgeLeftBtn')?.addEventListener('click', () => robotActionEngine.turnLeft(450));
+  $('#nudgeRightBtn')?.addEventListener('click', () => robotActionEngine.turnRight(450));
+  $('#nudgeStopBtn')?.addEventListener('click', () => robotActionEngine.stop());
 
   /* =========================================================================
    * MODULE 10: INTENT & ACTION ENGINE
@@ -7145,23 +7293,28 @@ function hookRecognitionDiagnostics(r){
     }
 
     forward(speed = 45, duration = 800) {
+      setState('alert', 'action · forward');
       return this.conn.drive(speed, speed, duration);
     }
 
     backward(speed = 40, duration = 700) {
+      setState('curious', 'action · reversing');
       return this.conn.drive(-speed, -speed, duration);
     }
 
     turnLeft(angleMs = 450) {
+      setState('curious', 'action · turn left');
       return this.conn.drive(-40, 40, angleMs);
     }
 
     turnRight(angleMs = 450) {
+      setState('curious', 'action · turn right');
       return this.conn.drive(40, -40, angleMs);
     }
 
     stop() {
       this.isPerformingAction = false;
+      setState('curious', 'action · stopped');
       return this.conn.stop();
     }
 
@@ -7368,11 +7521,11 @@ function hookRecognitionDiagnostics(r){
     tickAutonomy() {
       if (!this.autonomyEnabled) return;
       if (this.conn.watchdog.isEmergencyStopped || this.conn.watchdog.isWatchdogTripped) return;
-      if (talking || listening) return;
+      if (talking || listening || aiRequestInFlight) return;
 
       const now = Date.now();
 
-      // 1. Visual Servoing / Face Following Alignment
+      // Tier 1: Visual Servoing / Face Following Alignment
       if (cameraEnabled && activeFaceTarget?.personId && activeFaceTarget?.box) {
         const box = activeFaceTarget.box;
         if (isValidFaceBox(box) && now - this.lastFaceAlignmentAt > 900) {
@@ -7391,7 +7544,7 @@ function hookRecognitionDiagnostics(r){
         }
       }
 
-      // 2. Social Greeting on arrival (Cozmo active recognition greeting)
+      // Tier 2: Proactive Cozmo Greeting on arrival
       if (socialAwareness?.humanPresence === 'present' && activeFaceTarget?.personId) {
         if (this.lastSocialGreetingPersonId !== activeFaceTarget.personId && now - this.lastFaceAlignmentAt > 2000) {
           this.lastSocialGreetingPersonId = activeFaceTarget.personId;
@@ -7408,8 +7561,8 @@ function hookRecognitionDiagnostics(r){
         this.lastSocialGreetingPersonId = null;
       }
 
-      // 3. Autonomous Idle Curiosity Nudges
-      if (autoIdleEnabled && now - lastActivity > 20000 && now - this.lastFaceAlignmentAt > 15000) {
+      // Tier 3: Curiosity Exploration Nudges (looking around when idle)
+      if (autoIdleEnabled && now - lastActivity > 18000 && now - this.lastFaceAlignmentAt > 14000) {
         this.lastFaceAlignmentAt = now;
         const choices = ['lookLeft', 'lookRight', 'idleNod'];
         const choice = choices[Math.floor(Math.random() * choices.length)];
@@ -7417,6 +7570,20 @@ function hookRecognitionDiagnostics(r){
         if (choice === 'lookLeft') this.action.turnLeft(200);
         else if (choice === 'lookRight') this.action.turnRight(200);
         else if (choice === 'idleNod') this.action.nod();
+        return;
+      }
+
+      // Tier 4: Boredom / Sleepiness Cycle on extended inactivity (>55s with no human presence)
+      if (autoIdleEnabled && now - lastActivity > 55000 && socialAwareness?.humanPresence === 'no-person') {
+        if (state !== 'sleepy') {
+          devLog('AUTONOMY', 'Extended inactivity · Max is gently snoozing');
+          setState('sleepy', 'idle · snoozing');
+        }
+      } else if (state === 'sleepy' && socialAwareness?.humanPresence === 'present') {
+        // As soon as a human arrives, perk up immediately!
+        devLog('AUTONOMY', 'Human detected · perking up from snooze');
+        setState('curious', 'perked up · human detected');
+        lastActivity = now;
       }
     }
   }
