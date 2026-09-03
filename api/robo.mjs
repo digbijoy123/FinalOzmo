@@ -757,6 +757,19 @@ export default async function handler(
     ).toLowerCase();
 
   if (req.method === 'GET') {
+    try {
+      const parsedUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+      if (parsedUrl.searchParams.get('action') === 'get_live_token' || parsedUrl.searchParams.get('live_key') === 'true') {
+        const liveKey = process.env.GEMINI_API_KEY || req.headers['x-gemini-key'] || '';
+        return json(res, 200, {
+          ok: true,
+          key: liveKey,
+          configured: Boolean(liveKey),
+          model: 'models/gemini-2.0-flash-exp'
+        });
+      }
+    } catch (_) {}
+
     const customGeminiKey = req.headers['x-gemini-key'];
     const customElevenKey = req.headers['x-elevenlabs-key'];
 
