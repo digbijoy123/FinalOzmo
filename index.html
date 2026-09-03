@@ -766,9 +766,17 @@ button{font:inherit}
     const x=Number(box.x), y=Number(box.y), w=Number(box.width), h=Number(box.height);
     if(!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(w) || !Number.isFinite(h)) return false;
     if(w < 36 || h < 36) return false;
-    const maxW = (camera?.videoWidth || 1920) * 0.90;
-    const maxH = (camera?.videoHeight || 1080) * 0.90;
+    const vw = camera?.videoWidth || 720;
+    const vh = camera?.videoHeight || 1280;
+    const maxW = vw * 0.90;
+    const maxH = vh * 0.90;
     if(w > maxW || h > maxH) return false;
+    // Reject boxes that are clipped off the camera view (negative x/y or extreme overflow)
+    if(x < -15 || y < -15) return false;
+    if(x + w > vw + 25) return false;
+    if(y + h > vh + 25) return false;
+    // Reject boxes resting against the bottom edge (desk, table, shirt patterns)
+    if(y + h >= vh * 0.94 && h > vh * 0.30) return false;
     const ratio = h / w;
     if(ratio < 0.65 || ratio > 1.65) return false;
     return true;
@@ -2719,8 +2727,8 @@ button{font:inherit}
           previousTarget &&
           isValidFaceBox(previousTarget.box) &&
           (
-            targetIoU>=0.08 ||
-            targetDistance<=Math.max(140,Math.min(camera.videoWidth||720,camera.videoHeight||1280)*0.24)
+            targetIoU>=0.06 ||
+            targetDistance<=Math.max(220,Math.min(camera.videoWidth||720,camera.videoHeight||1280)*0.45)
           )
         );
         const sameTargetAfterGap=canReacquireSameTrackedTarget(primary);
@@ -4078,10 +4086,14 @@ button{font:inherit}
 
   function drawDomeEye(ctx, ex, ey_center, ew, eh, cr, browSlant, happyBlend, side, gX = 0, gY = 0) {
     ctx.save();
-    // Gaze tracking offset (Module 2 ↔ Module 8)
-    const gazeShiftX = gX * (ew * 0.12);
-    const gazeShiftY = gY * (eh * 0.10);
-    ctx.translate(ex + gazeShiftX, ey_center + gazeShiftY);
+    // Gaze tracking offset (Module 2 ↔ Module 8) - strictly sanitized against NaN
+    const safeGX = Number.isFinite(gX) ? Math.max(-1, Math.min(1, gX)) : 0;
+    const safeGY = Number.isFinite(gY) ? Math.max(-1, Math.min(1, gY)) : 0;
+    const gazeShiftX = safeGX * (ew * 0.12);
+    const gazeShiftY = safeGY * (eh * 0.10);
+    const targetX = Number.isFinite(ex + gazeShiftX) ? (ex + gazeShiftX) : ex;
+    const targetY = Number.isFinite(ey_center + gazeShiftY) ? (ey_center + gazeShiftY) : ey_center;
+    ctx.translate(targetX, targetY);
 
     // Brow slant (tilts eyes for angry, alert, sad, confused)
     if (browSlant !== 0) {
@@ -4355,12 +4367,18 @@ button{font:inherit}
 
       if (hasTrackedFace) {
         const box = activeFaceTarget.box;
-        // box coords are normalized 0-100:
-        // camera is mirrored on mobile user-facing view, so invert X for natural eye contact:
-        const faceNormX = ((box.left + box.width / 2) - 50) / 32;
-        const faceNormY = ((box.top + box.height / 2) - 45) / 30;
-        targetGazeX = Math.max(-1.0, Math.min(1.0, -faceNormX)); // look towards person
-        targetGazeY = Math.max(-0.75, Math.min(0.75, faceNormY));
+        const vw = Math.max(1, camera?.videoWidth || 720);
+        const vh = Math.max(1, camera?.videoHeight || 1280);
+        const bx = Number(box.x) || 0;
+        const by = Number(box.y) || 0;
+        const bw = Number(box.width) || 120;
+        const bh = Number(box.height) || 120;
+        const centerX = ((bx + bw / 2) / vw) * 100;
+        const centerY = ((by + bh / 2) / vh) * 100;
+        const faceNormX = (centerX - 50) / 32;
+        const faceNormY = (centerY - 45) / 30;
+        targetGazeX = Number.isFinite(faceNormX) ? Math.max(-0.85, Math.min(0.85, -faceNormX)) : 0;
+        targetGazeY = Number.isFinite(faceNormY) ? Math.max(-0.65, Math.min(0.65, faceNormY)) : 0;
       } else {
         // Organic idle micro-saccades (natural companion eye glances every 2.5–4.5s)
         const nowMs = performance.now();
@@ -4376,10 +4394,15 @@ button{font:inherit}
         }
       }
 
+      if (!Number.isFinite(targetGazeX)) targetGazeX = 0;
+      if (!Number.isFinite(targetGazeY)) targetGazeY = 0;
+
       // Smooth gaze tracking response (natural eye inertia damping)
       const gazeRate = Math.min(1, dt / 130);
       gazeX += (targetGazeX - gazeX) * gazeRate;
       gazeY += (targetGazeY - gazeY) * gazeRate;
+      if (!Number.isFinite(gazeX)) gazeX = 0;
+      if (!Number.isFinite(gazeY)) gazeY = 0;
 
       // Proportions matching the hardware reference image:
       // In Landscape & Portrait, make eyes and mouth LARGE, majestic and commanding
@@ -5036,6 +5059,9 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
 
     start() {
       if (!this.armed || !SR || this.starting || this.running) return;
+      if (window.geminiLiveClient && (window.geminiLiveClient.connected || window.geminiLiveClient.connecting || window.geminiLiveClient.liveModeActive)) {
+        return; // Gemini Live mode owns the microphone
+      }
       if (talking || aiRequestInFlight) return;
 
       try {
@@ -5185,8 +5211,14 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
         // Smart VAD Debounce:
         // On Android Chrome, finalText fires prematurely on individual words (e.g. "can", "what", "tell").
         // Do NOT cut the user off immediately. Wait for natural silence before dispatching.
-        const wordCount = spoken.trim().split(/\s+/).length;
-        const debounceMs = finalText ? (wordCount >= 4 ? 480 : 800) : 1300;
+        // Check if sentence ends in an incomplete conjunction, preposition, or article:
+        const trimmed = spoken.trim().toLowerCase();
+        const isIncompleteClause = /\b(and|or|but|because|with|that|to|about|in|at|if|then|is|are|the|a|an|of|for|as)\s*$/i.test(trimmed);
+
+        // Generous VAD Debounce:
+        // If the user ended on an incomplete connector ("...about India and"), wait 1800ms!
+        // For general speech, wait a comfortable 1200ms of true silence before finalizing.
+        const debounceMs = isIncompleteClause ? 1800 : (finalText ? 1200 : 1600);
 
         this.silenceTimer = setTimeout(() => {
           if ((this.mode === VoiceMode.ACTIVE_LISTENING || this.mode === VoiceMode.ACTIVE_CONVERSATION) && this.transcriptBuffer) {
@@ -5235,6 +5267,9 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
       log('VOICE · recognition session ended');
 
       if (!this.armed) return;
+      if (window.geminiLiveClient && (window.geminiLiveClient.connected || window.geminiLiveClient.connecting || window.geminiLiveClient.liveModeActive)) {
+        return; // Gemini Live mode owns the microphone
+      }
       if (talking || aiRequestInFlight) return;
 
       const delay = (this.mode === VoiceMode.ACTIVE_CONVERSATION || this.mode === VoiceMode.ACTIVE_LISTENING) ? 100 : 250;
@@ -5243,6 +5278,9 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
 
     scheduleRestart(delay = 250) {
       if (!this.armed) return;
+      if (window.geminiLiveClient && (window.geminiLiveClient.connected || window.geminiLiveClient.connecting || window.geminiLiveClient.liveModeActive)) {
+        return; // Gemini Live mode owns the microphone
+      }
       if (talking || aiRequestInFlight) return;
       clearTimeout(this.restartTimer);
       this.restartTimer = setTimeout(() => {
@@ -5483,6 +5521,15 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
           if (data && data.key) key = data.key.trim();
         } catch (_) {}
       }
+      if (!key) {
+        const inputKey = window.prompt('Enter your Gemini API Key to enable Live Full-Duplex conversation:', '');
+        if (inputKey && inputKey.trim()) {
+          key = inputKey.trim();
+          localStorage.setItem('robo_gemini_api_key', key);
+          const gInput = document.getElementById('devGeminiKey');
+          if (gInput) gInput.value = key;
+        }
+      }
       return key;
     }
 
@@ -5497,20 +5544,20 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
         this.connecting = false;
         this.liveModeActive = false;
         this.updateUI();
-        devLog('LIVE', 'No Gemini API key available. Configure in DEV screen or Vercel env.');
-        showCaption('MAX LIVE: GEMINI KEY NEEDED\nAdd Gemini API key in DEV screen to connect.', true);
+        devLog('LIVE', 'No Gemini API key available. Configure in DEV screen or prompt.');
+        showCaption('MAX LIVE: GEMINI KEY NEEDED\nEnter your Gemini API key in DEV screen to connect.', true);
         return;
       }
 
       this.activeKey = apiKey;
-      devLog('LIVE', 'Connecting to Gemini Multimodal Live API...');
+      devLog('LIVE', 'Connecting to Gemini Multimodal Live API (v1beta)...');
       showCaption('MAX LIVE CONNECTING…\nInitiating full-duplex WebSocket stream…', true);
 
       // Stop standby wake engine while in Live mode to prevent mic collision
       try { voiceEngine.stop('live-mode-active'); } catch (_) {}
 
       try {
-        const wsUrl = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=${encodeURIComponent(apiKey)}`;
+        const wsUrl = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${encodeURIComponent(apiKey)}`;
         this.connectStartTime = performance.now();
         this.ws = new WebSocket(wsUrl);
 
@@ -5799,8 +5846,12 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
       showCaption('MAX STANDBY\nSay “Max” to talk or tap LIVE…', true);
       this.updateUI();
 
-      // Resume Standby Wake Engine
-      try { voiceEngine.start(); } catch (_) {}
+      // Resume Standby Wake Engine after short delay so audio devices reset cleanly
+      setTimeout(() => {
+        if (!this.liveModeActive) {
+          try { voiceEngine.start(); } catch (_) {}
+        }
+      }, 350);
     }
 
     handleError(err) {
@@ -5810,6 +5861,9 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
 
     handleClose(event) {
       devLog('LIVE', `WebSocket closed (code: ${event.code}, reason: ${event.reason || 'clean'})`);
+      if (event.code !== 1000 && event.code !== 1005) {
+        showCaption(`MAX LIVE CLOSED (${event.code})\n${event.reason || 'Check your Gemini key in DEV screen'}`, true);
+      }
       this.stop();
     }
 
