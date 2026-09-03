@@ -6560,51 +6560,56 @@ loadRoboMemory();
   factoryResetMemoryForV290();
 
 function runDevChecks(){
-  const list=[
-    ["HTTPS / localhost",location.protocol==="https:"||location.hostname==="localhost"||location.hostname==="127.0.0.1"],
-    ["getUserMedia",!!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia)],
-    ["SpeechRecognition",!!(window.SpeechRecognition||window.webkitSpeechRecognition)],
-    ["Wake engine",!!(window.SpeechRecognition||window.webkitSpeechRecognition)],
-    ["Speech synthesis","speechSynthesis" in window],
-    ["Camera",!!$("#camera") && !!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia)],
-    ["3D emoji canvas",!!$("#face")],
-    ["Media permission API",!!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia)],
-    ["On-device STT API",!!(window.SpeechRecognition&&"processLocally" in window.SpeechRecognition.prototype)],
-    ["AI adapter route",true],
-    ["Camera vision capture",!!(cameraEnabled && cameraStream && $("#camera")?.videoWidth>1 && $("#camera")?.videoHeight>1)],
-    ["Camera state",cameraEnabled && !!cameraStream],
-    ["Structured vision state",!!window.__roboStructuredVisionReady],
-    ["Module 6 social awareness engine",typeof deriveSocialAwareness==="function"],
-     ["Module 8 face tracking engine",typeof ensureFaceEngine==="function"],
-     ["Module 8 face overlay",!!$("#faceTrackingOverlay")],
-    ["Social awareness UI",!!$("#socialAwareness")],
-    ["Module 7 memory engine",typeof handleMemoryCommand==="function"],
-    ["Multi-person memory registry",!!(roboMemory&&Array.isArray(roboMemory.persons)&&roboMemory.persons.length>0)],
-    ["Active identity resolver",typeof findFaceMatch==="function"&&typeof setActivePerson==="function"],
-    ["Live face → social coupling",typeof deriveLiveSocialFromFaces==="function"],
-    ["Module 10 intent & action engine", Boolean((typeof RobotActionEngine !== 'undefined') || (typeof robotActionEngine !== 'undefined' && robotActionEngine))],
-    ["Module 11 planning & autonomy", Boolean((typeof AutonomousPlanner !== 'undefined') || (typeof autonomousPlanner !== 'undefined' && autonomousPlanner))],
-    ["Module 12 robot body connection", Boolean((typeof RobotConnectionManager !== 'undefined') || (typeof robotConnectionManager !== 'undefined' && robotConnectionManager))],
-    ["Module 13 motor safety watchdog", Boolean((typeof MotorSafetyWatchdog !== 'undefined') || (typeof motorSafetyWatchdog !== 'undefined' && motorSafetyWatchdog))],
-    ["Persistent memory storage",typeof localStorage!=="undefined"],
-    ["Memory identity UI",!!$("#memoryIdentity")],
-    ["Perception fusion",typeof updatePerceptionFusion==="function"],
-    ["Fusion diagnostics",!!$("#devFusionState")],
-    ["AI API key",null]
-  ];
-  $("#devChecks").innerHTML=list.map(x=>{
-    const label=x[0];
-    const status=label==="AI API key"?"CHECKING":(x[1]?"PASS":"FAIL");
-    const cls=label==="AI API key"?"warn":(x[1]?"ok":"fail");
-    return `<div class="devCheck ${cls}"><span>${label}</span><b>${status}</b></div>`;
-  }).join("");
-  list.forEach(x=>{
-    if(x[0]==="AI API key") return;
-    devLog("CHECK",x[0]+": "+(x[1]?"PASS":"FAIL"));
-  });
-  refreshAIProviderDiagnostic();
+  try {
+    const list=[
+      ["HTTPS / localhost",location.protocol==="https:"||location.hostname==="localhost"||location.hostname==="127.0.0.1"],
+      ["getUserMedia",!!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia)],
+      ["SpeechRecognition",!!(window.SpeechRecognition||window.webkitSpeechRecognition)],
+      ["Wake engine",!!(window.SpeechRecognition||window.webkitSpeechRecognition)],
+      ["Speech synthesis","speechSynthesis" in window],
+      ["Camera",!!$("#camera") && !!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia)],
+      ["3D emoji canvas",!!$("#face")],
+      ["Media permission API",!!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia)],
+      ["On-device STT API",!!(window.SpeechRecognition&&"processLocally" in window.SpeechRecognition.prototype)],
+      ["AI adapter route",true],
+      ["Camera vision capture",!!(cameraEnabled && cameraStream && $("#camera")?.videoWidth>1 && $("#camera")?.videoHeight>1)],
+      ["Camera state",cameraEnabled && !!cameraStream],
+      ["Structured vision state",!!window.__roboStructuredVisionReady],
+      ["Module 6 social awareness engine",typeof deriveSocialAwareness==="function"],
+      ["Module 8 face tracking engine",typeof ensureFaceEngine==="function"],
+      ["Module 8 face overlay",!!$("#faceTrackingOverlay")],
+      ["Social awareness UI",!!$("#socialAwareness")],
+      ["Module 7 memory engine",typeof handleMemoryCommand==="function"],
+      ["Multi-person memory registry",!!(roboMemory&&Array.isArray(roboMemory.persons)&&roboMemory.persons.length>0)],
+      ["Active identity resolver",typeof findFaceMatch==="function"&&typeof setActivePerson==="function"],
+      ["Live face → social coupling",typeof deriveLiveSocialFromFaces==="function"],
+      ["Module 10 intent & action engine", Boolean(robotActionEngine || (typeof window.RobotActionEngine !== 'undefined'))],
+      ["Module 11 planning & autonomy", Boolean(autonomousPlanner || (typeof window.AutonomousPlanner !== 'undefined'))],
+      ["Module 12 robot body connection", Boolean(robotConnectionManager || (typeof window.RobotConnectionManager !== 'undefined'))],
+      ["Module 13 motor safety watchdog", Boolean(motorSafetyWatchdog || (typeof window.MotorSafetyWatchdog !== 'undefined'))],
+      ["Persistent memory storage",typeof localStorage!=="undefined"],
+      ["Memory identity UI",!!$("#memoryIdentity")],
+      ["Perception fusion",typeof updatePerceptionFusion==="function"],
+      ["Fusion diagnostics",!!$("#devFusionState")],
+      ["AI API key",null]
+    ];
+    if($("#devChecks")){
+      $("#devChecks").innerHTML=list.map(x=>{
+        const label=x[0];
+        const status=label==="AI API key"?"CHECKING":(x[1]?"PASS":"FAIL");
+        const cls=label==="AI API key"?"warn":(x[1]?"ok":"fail");
+        return `<div class="devCheck ${cls}"><span>${label}</span><b>${status}</b></div>`;
+      }).join("");
+    }
+    list.forEach(x=>{
+      if(x[0]==="AI API key") return;
+      devLog("CHECK",x[0]+": "+(x[1]?"PASS":"FAIL"));
+    });
+    refreshAIProviderDiagnostic();
+  } catch(devCheckErr) {
+    console.warn("runDevChecks non-fatal notice:", devCheckErr);
+  }
 }
-runDevChecks();
 
   /* ---------- 3-Screen Shell Navigation (Phase 1) ---------- */
   let currentScreen = "face"; // 'face' | 'camera' | 'dev'
