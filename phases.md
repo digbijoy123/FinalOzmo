@@ -150,3 +150,31 @@ state — never leave the app broken between phases.
 - Closed-loop telemetry: cliff/edge drop sensors (table safety), wheel odometry encoders, battery voltage ADC, and stall detection.
 - Fail-safe watchdog enforcement: hardware stops motors if communication drops for >750ms.
 
+---
+
+## Active Enhancement Track: Phases A, B, C
+
+### Phase A — Voice Recognition & Dev Diagnostics Overhaul [COMPLETED]
+- Purged redundant SpeechRecognition wrappers and memory leaks.
+- Upgraded `runDevChecks()` to production grade with automated status reporting for all 13 modules.
+- Added live Cozmo soundboard with 8 procedural chirps/expressions.
+
+### Phase B — Wake Word Detector & Continuous Voice Dialogue [COMPLETED]
+- Multi-alternative speech scanning (`maxAlternatives = 3`) and Levenshtein distance fuzzy matching for "Max".
+- Zero-dead-window hot-restart (15ms delay) with error recovery and barge-in (<50ms).
+- 15-second multi-turn continuous conversation mode with graceful goodbye detection.
+
+### Phase C — Visual Face Enrollment HUD & Multi-Angle Biometric Wizard [COMPLETED]
+- Circular biometric reticle overlay with animated SVG progress ring (`0% → 100%`) and cybernetic crosshairs/corners.
+- 5-angle biometric sampling sequence:
+  1. Frontal (0% → 20%)
+  2. Left profile (20% → 40%)
+  3. Right profile (40% → 60%)
+  4. Upward tilt (60% → 80%)
+  5. Smiling expression (80% → 100%)
+- Procedural audio feedback on each angle capture (`cozmoSoundEngine.playChirp`) and excited fanfare (`cozmoSoundEngine.playExcited`).
+- Multi-angle descriptor vectors stored in persistent `roboMemory.persons` profile.
+- Integrated into `runDevChecks()` as `Module 8.5 Face enrollment wizard` (`PASS`).
+- Voice intent integration ("enroll my face", "start face enrollment").
+
+

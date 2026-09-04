@@ -216,6 +216,297 @@ button{font:inherit}
   .screenHeader{padding:10px 10px}
 }
 
+/* ---------- Phase C: Biometric Face Enrollment HUD & Reticle ---------- */
+.enrollmentHUD {
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 12px 14px;
+  background: radial-gradient(circle at center, rgba(9,13,21,0.2) 0%, rgba(5,7,12,0.85) 100%);
+  animation: hudFadeIn .3s ease-out;
+}
+@keyframes hudFadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+.enrollmentHUDTop {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  pointer-events: auto;
+}
+.enrollmentHUDTitleBadge {
+  font: 700 8.5px/1.2 ui-monospace,monospace;
+  letter-spacing: .12em;
+  padding: 5px 10px;
+  border-radius: 8px;
+  background: rgba(0, 229, 255, 0.15);
+  border: 1px solid var(--cyan);
+  color: var(--cyan);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 0 12px rgba(0,229,255,0.25);
+}
+.enrollmentHUDTitleBadge .biometricPulseDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--cyan);
+  box-shadow: 0 0 8px var(--cyan);
+  animation: bioDotPulse 1.2s infinite ease-in-out;
+}
+@keyframes bioDotPulse {
+  0%, 100% { opacity: 0.4; transform: scale(0.9); }
+  50% { opacity: 1; transform: scale(1.3); }
+}
+.enrollCancelBtn {
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(20, 26, 38, 0.85);
+  color: #8f98aa;
+  border-radius: 8px;
+  padding: 5px 10px;
+  font: 700 7.5px/1.2 ui-monospace,monospace;
+  letter-spacing: .08em;
+  cursor: pointer;
+  transition: all .15s ease;
+}
+.enrollCancelBtn:hover {
+  background: rgba(255, 75, 75, 0.2);
+  border-color: #ff5555;
+  color: #ff8888;
+}
+
+.biometricReticleContainer {
+  position: relative;
+  width: min(58vw, 240px);
+  height: min(58vw, 240px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: auto 0;
+}
+.biometricProgressSvg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+  overflow: visible;
+}
+.biometricBgCircle {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.12);
+  stroke-width: 4;
+}
+.biometricRing {
+  fill: none;
+  stroke: var(--cyan);
+  stroke-width: 5;
+  stroke-linecap: round;
+  stroke-dasharray: 314.16;
+  stroke-dashoffset: 314.16;
+  transition: stroke-dashoffset 0.45s cubic-bezier(0.4, 0, 0.2, 1), stroke 0.3s ease;
+  filter: drop-shadow(0 0 8px var(--cyan));
+}
+.biometricReticleContainer.success .biometricRing {
+  stroke: var(--green);
+  filter: drop-shadow(0 0 14px var(--green));
+}
+.biometricGuideLines {
+  position: absolute;
+  inset: 12px;
+  border-radius: 50%;
+  border: 1px dashed rgba(95, 212, 208, 0.25);
+  pointer-events: none;
+}
+.biometricCrosshairH, .biometricCrosshairV {
+  position: absolute;
+  background: rgba(95, 212, 208, 0.35);
+}
+.biometricCrosshairH {
+  top: 50%;
+  left: 10%;
+  right: 10%;
+  height: 1px;
+  transform: translateY(-50%);
+}
+.biometricCrosshairV {
+  left: 50%;
+  top: 10%;
+  bottom: 10%;
+  width: 1px;
+  transform: translateX(-50%);
+}
+.reticleCorner {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-color: var(--cyan);
+  border-style: solid;
+  opacity: 0.75;
+}
+.reticleCorner.tl { top: 0; left: 0; border-width: 2px 0 0 2px; }
+.reticleCorner.tr { top: 0; right: 0; border-width: 2px 2px 0 0; }
+.reticleCorner.bl { bottom: 0; left: 0; border-width: 0 0 2px 2px; }
+.reticleCorner.br { bottom: 0; right: 0; border-width: 0 2px 2px 0; }
+
+.biometricStatusOverlay {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  pointer-events: none;
+}
+.biometricPercent {
+  font: 800 22px/1 'Fredoka', ui-monospace, monospace;
+  color: #fff;
+  letter-spacing: .02em;
+  text-shadow: 0 0 12px rgba(0,229,255,0.6);
+}
+.biometricReticleContainer.success .biometricPercent {
+  color: var(--green);
+  text-shadow: 0 0 14px rgba(85,197,140,0.7);
+}
+.biometricSampleState {
+  font: 700 7.5px/1.2 ui-monospace, monospace;
+  letter-spacing: .1em;
+  color: var(--cyan);
+  margin-top: 3px;
+  text-transform: uppercase;
+}
+
+.biometricInstructions {
+  width: 100%;
+  max-width: 360px;
+  background: rgba(16, 22, 35, 0.9);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(0, 229, 255, 0.3);
+  border-radius: 14px;
+  padding: 10px 14px;
+  text-align: center;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5), 0 0 16px rgba(0, 229, 255, 0.15);
+  pointer-events: auto;
+  transition: all .25s ease;
+}
+.biometricStepLabel {
+  font: 700 8px/1.2 ui-monospace, monospace;
+  letter-spacing: .14em;
+  color: var(--amber);
+  margin-bottom: 3px;
+}
+.biometricActionText {
+  font: 600 13px/1.3 'Fredoka', sans-serif;
+  color: #ffffff;
+  margin-bottom: 2px;
+}
+.biometricSubText {
+  font: 500 8px/1.2 ui-monospace, monospace;
+  color: #8f98aa;
+}
+
+/* Enrollment Name Prompt Modal */
+.enrollPromptModal {
+  position: absolute;
+  inset: 0;
+  z-index: 60;
+  background: rgba(7, 10, 17, 0.85);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  animation: modalFadeIn .25s ease-out;
+}
+@keyframes modalFadeIn { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: scale(1); } }
+.enrollPromptCard {
+  background: #131926;
+  border: 1px solid rgba(0, 229, 255, 0.25);
+  border-radius: 16px;
+  padding: 20px;
+  max-width: 340px;
+  width: 100%;
+  box-shadow: 0 12px 36px rgba(0,0,0,.6), 0 0 20px rgba(0,229,255,.1);
+}
+.enrollPromptTitle {
+  font: 700 11px/1.2 ui-monospace, monospace;
+  letter-spacing: .12em;
+  color: var(--cyan);
+  margin-bottom: 6px;
+}
+.enrollPromptSub {
+  font-size: 8.5px;
+  line-height: 1.4;
+  color: #8f98aa;
+  margin-bottom: 14px;
+}
+.enrollInputGroup {
+  margin-bottom: 12px;
+}
+.enrollInputGroup label {
+  display: block;
+  font: 700 7.5px/1.2 ui-monospace, monospace;
+  letter-spacing: .08em;
+  color: #b0b8c8;
+  margin-bottom: 4px;
+}
+.enrollInputGroup input {
+  width: 100%;
+  box-sizing: border-box;
+  background: #0b0e16;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: #fff;
+  font: 500 11px/1.2 ui-monospace, monospace;
+  outline: none;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+.enrollInputGroup input:focus {
+  border-color: var(--cyan);
+  box-shadow: 0 0 10px rgba(0,229,255,.3);
+}
+.enrollModalBtns {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+}
+.enrollModalBtn {
+  flex: 1;
+  border-radius: 10px;
+  padding: 10px 8px;
+  font: 700 8.5px/1.2 ui-monospace, monospace;
+  letter-spacing: .06em;
+  cursor: pointer;
+  transition: all .15s ease;
+  user-select: none;
+}
+.enrollModalBtn.cancel {
+  border: 1px solid rgba(255,255,255,0.15);
+  background: #1b2232;
+  color: #8f98aa;
+}
+.enrollModalBtn.cancel:hover {
+  background: #242c40;
+  color: #fff;
+}
+.enrollModalBtn.start {
+  border: 1px solid var(--cyan);
+  background: rgba(0, 229, 255, 0.18);
+  color: var(--cyan);
+  box-shadow: 0 0 12px rgba(0,229,255,0.25);
+}
+.enrollModalBtn.start:hover {
+  background: var(--cyan);
+  color: #0b0f18;
+}
+
 /* Screen 3: Dev Screen */
 #screenDev{position:fixed;inset:0;z-index:9999;isolation:isolate;background:#10131d;color:#f5f7ff;overflow:auto;display:none;font-family:'JetBrains Mono',monospace}
 #screenDev.active{display:block}
@@ -338,11 +629,68 @@ button{font:inherit}
           <div class="perceptionFusion" id="perceptionFusion" data-state="unknown">ROBO · PERCEPTION INITIALIZING</div>
           <span class="camRec"></span>
           <span class="camLabel">what I see</span>
+
+          <!-- PHASE C: VISUAL BIOMETRIC ENROLLMENT HUD -->
+          <div class="enrollmentHUD" id="enrollmentHUD" style="display:none;">
+            <div class="enrollmentHUDTop">
+              <div class="enrollmentHUDTitleBadge">
+                <span class="biometricPulseDot"></span>
+                <span id="enrollmentHUDPersonName">ENROLLING FACE</span>
+              </div>
+              <button type="button" class="enrollCancelBtn" id="enrollCancelBtn">✕ CANCEL</button>
+            </div>
+
+            <div class="biometricReticleContainer" id="biometricReticleContainer">
+              <svg class="biometricProgressSvg" viewBox="0 0 120 120">
+                <circle class="biometricBgCircle" cx="60" cy="60" r="50"></circle>
+                <circle class="biometricRing" id="biometricRing" cx="60" cy="60" r="50"></circle>
+              </svg>
+              <div class="biometricGuideLines">
+                <div class="biometricCrosshairH"></div>
+                <div class="biometricCrosshairV"></div>
+              </div>
+              <div class="reticleCorner tl"></div>
+              <div class="reticleCorner tr"></div>
+              <div class="reticleCorner bl"></div>
+              <div class="reticleCorner br"></div>
+              <div class="biometricStatusOverlay">
+                <div class="biometricPercent" id="biometricPercent">0%</div>
+                <div class="biometricSampleState" id="biometricSampleState">ALIGN FACE</div>
+              </div>
+            </div>
+
+            <div class="biometricInstructions" id="biometricInstructions">
+              <div class="biometricStepLabel" id="biometricStepLabel">STEP 1 OF 5 · FRONTAL SCAN</div>
+              <div class="biometricActionText" id="biometricActionText">Look directly at the camera</div>
+              <div class="biometricSubText" id="biometricSubText">Center your face inside the biometric reticle</div>
+            </div>
+          </div>
+
+          <!-- PHASE C: ENROLLMENT NAME PROMPT MODAL -->
+          <div class="enrollPromptModal" id="enrollPromptModal" style="display:none;">
+            <div class="enrollPromptCard">
+              <div class="enrollPromptTitle">BIOMETRIC FACE ENROLLMENT</div>
+              <div class="enrollPromptSub">Register a person into Max's long-term memory with multi-angle biometric descriptors.</div>
+              <div class="enrollInputGroup">
+                <label for="enrollNameInput">Person Name</label>
+                <input type="text" id="enrollNameInput" placeholder="e.g. Digbijoy, Sarah, Alex" maxlength="40" autocomplete="off" />
+              </div>
+              <div class="enrollInputGroup">
+                <label for="enrollRelationInput">Relationship (Optional)</label>
+                <input type="text" id="enrollRelationInput" placeholder="e.g. Owner, Friend, Creator" maxlength="30" autocomplete="off" />
+              </div>
+              <div class="enrollModalBtns">
+                <button type="button" class="enrollModalBtn cancel" id="enrollModalCancelBtn">CANCEL</button>
+                <button type="button" class="enrollModalBtn start" id="enrollModalStartBtn">BEGIN SCAN</button>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div class="cameraControlsBar">
           <button class="camControlBtn" id="screenCameraToggleBtn">START CAMERA</button>
           <button class="camControlBtn" id="screenCameraSwitchBtn2">FLIP CAM</button>
+          <button class="camControlBtn highlight" id="enrollFaceBtn">+ ENROLL FACE</button>
           <button class="camControlBtn highlight" data-screen="face">RETURN TO FACE</button>
         </div>
       </section>
@@ -3891,6 +4239,17 @@ button{font:inherit}
       return {handled:true,reply:'I cleared my persistent multi-person memory.',emotion:'neutral'};
     }
 
+    // Phase C: Biometric Face Enrollment Wizard voice command
+    if (/(?:enroll my face|face enrollment|enroll face|biometric enrollment|multi-angle scan|multi angle scan|scan my face|scan face)/i.test(l)) {
+      if (typeof switchScreen === 'function') switchScreen('camera');
+      if (window.faceEnrollmentWizard) window.faceEnrollmentWizard.openPromptModal();
+      return {
+        handled: true,
+        reply: "I've opened the biometric face enrollment wizard on the camera screen! Enter your name and let's begin the 5-angle scan.",
+        emotion: 'curious'
+      };
+    }
+
     // 1. Spoken Name & Face Memorization (English, Hindi, Bengali)
     // Matches: "My name is X", "I am X", "Remember me as X", "Remember my face as X", "Save my face as X", "Call me X"
     // Matches: "Mera naam X hai", "Mujhe X bulao", "Amar naam X"
@@ -5066,6 +5425,426 @@ button{font:inherit}
   function playCozmoWakeChime(){
     cozmoSoundEngine.playWakeChime();
   }
+
+  /* ---------- Phase C: Multi-Angle Face Biometric Enrollment Wizard (Module 8.5) ---------- */
+  class FaceEnrollmentWizard {
+    constructor() {
+      this.active = false;
+      this.targetPersonName = '';
+      this.targetRelationship = '';
+      this.currentStepIndex = 0;
+      this.stepSteadyTicks = 0;
+      this.stepHoldTicks = 0;
+      this.collectedSamples = [];
+      this.loopTimer = null;
+      this.inFlight = false;
+      this.circumference = 314.16; // 2 * PI * 50
+
+      this.steps = [
+        {
+          index: 0,
+          pct: 20,
+          label: 'STEP 1 OF 5 · FRONTAL SCAN',
+          action: 'Look directly at the camera',
+          sub: 'Center your face inside the biometric reticle',
+          tag: 'frontal',
+          evaluate: (box, landmarks) => {
+            if (!box) return false;
+            if (!landmarks || !landmarks.positions) return true;
+            const pts = landmarks.positions;
+            const noseX = pts[30]?.x;
+            const leftEyeX = pts[36]?.x;
+            const rightEyeX = pts[45]?.x;
+            if (noseX == null || leftEyeX == null || rightEyeX == null) return true;
+            const midEyeX = (leftEyeX + rightEyeX) / 2;
+            const eyeDist = Math.abs(rightEyeX - leftEyeX) || 1;
+            const diff = Math.abs(noseX - midEyeX) / eyeDist;
+            return diff < 0.28;
+          }
+        },
+        {
+          index: 1,
+          pct: 40,
+          label: 'STEP 2 OF 5 · LEFT PROFILE',
+          action: 'Turn your head slightly LEFT',
+          sub: 'Hold steady for 15°–30° left profile capture',
+          tag: 'left-profile',
+          evaluate: (box, landmarks) => {
+            if (!landmarks || !landmarks.positions) return true;
+            const pts = landmarks.positions;
+            const noseX = pts[30]?.x;
+            const jawLeftX = pts[0]?.x;
+            const jawRightX = pts[16]?.x;
+            if (noseX == null || jawLeftX == null || jawRightX == null) return true;
+            const dLeft = Math.abs(noseX - jawLeftX);
+            const dRight = Math.abs(jawRightX - noseX);
+            return (dLeft / (dRight || 1) < 0.88) || (dRight / (dLeft || 1) > 1.14);
+          }
+        },
+        {
+          index: 2,
+          pct: 60,
+          label: 'STEP 3 OF 5 · RIGHT PROFILE',
+          action: 'Turn your head slightly RIGHT',
+          sub: 'Hold steady for 15°–30° right profile capture',
+          tag: 'right-profile',
+          evaluate: (box, landmarks) => {
+            if (!landmarks || !landmarks.positions) return true;
+            const pts = landmarks.positions;
+            const noseX = pts[30]?.x;
+            const jawLeftX = pts[0]?.x;
+            const jawRightX = pts[16]?.x;
+            if (noseX == null || jawLeftX == null || jawRightX == null) return true;
+            const dLeft = Math.abs(noseX - jawLeftX);
+            const dRight = Math.abs(jawRightX - noseX);
+            return (dRight / (dLeft || 1) < 0.88) || (dLeft / (dRight || 1) > 1.14);
+          }
+        },
+        {
+          index: 3,
+          pct: 80,
+          label: 'STEP 4 OF 5 · UPWARD TILT',
+          action: 'Tilt your chin slightly UPWARD',
+          sub: 'Hold steady for elevation angle capture',
+          tag: 'upward-tilt',
+          evaluate: (box, landmarks) => {
+            if (!landmarks || !landmarks.positions) return true;
+            const pts = landmarks.positions;
+            const noseTipY = pts[30]?.y;
+            const chinY = pts[8]?.y;
+            const mouthY = pts[57]?.y;
+            if (noseTipY == null || chinY == null || mouthY == null) return true;
+            return (chinY - mouthY) >= (mouthY - noseTipY) * 0.82;
+          }
+        },
+        {
+          index: 4,
+          pct: 100,
+          label: 'STEP 5 OF 5 · SMILE EXPRESSION',
+          action: 'Smile warmly at Max! 😊',
+          sub: 'Hold a wide smile for dynamic expression vector',
+          tag: 'smile-expression',
+          evaluate: (box, landmarks) => {
+            if (!landmarks || !landmarks.positions) return true;
+            const pts = landmarks.positions;
+            const mLeft = pts[48];
+            const mRight = pts[54];
+            const eLeft = pts[36];
+            const eRight = pts[45];
+            if (!mLeft || !mRight || !eLeft || !eRight) return true;
+            const mDist = Math.hypot(mRight.x - mLeft.x, mRight.y - mLeft.y);
+            const eDist = Math.hypot(eRight.x - eLeft.x, eRight.y - eLeft.y);
+            return (mDist / (eDist || 1)) > 0.65;
+          }
+        }
+      ];
+    }
+
+    openPromptModal() {
+      const activeP = (typeof getActivePerson === 'function' ? getActivePerson() : null) ||
+                      roboMemory?.persons?.find(p => p.personId === 'primary-user');
+      const nameInput = $('#enrollNameInput');
+      const relationInput = $('#enrollRelationInput');
+      if (nameInput) nameInput.value = activeP?.displayName || '';
+      if (relationInput) relationInput.value = activeP?.relationship || '';
+
+      const modal = $('#enrollPromptModal');
+      if (modal) {
+        modal.style.display = 'flex';
+        setTimeout(() => nameInput?.focus(), 50);
+      }
+    }
+
+    closePromptModal() {
+      const modal = $('#enrollPromptModal');
+      if (modal) modal.style.display = 'none';
+    }
+
+    async start(name, relation = '') {
+      const cleanName = (name || '').trim();
+      if (!cleanName) {
+        alert('Please enter a name for the person to enroll.');
+        return;
+      }
+      this.closePromptModal();
+      this.targetPersonName = cleanName;
+      this.targetRelationship = relation.trim();
+      this.active = true;
+      this.currentStepIndex = 0;
+      this.stepSteadyTicks = 0;
+      this.stepHoldTicks = 0;
+      this.collectedSamples = [];
+
+      // Ensure Camera is active
+      if (!cameraEnabled || !cameraStream || !camera.videoWidth) {
+        try {
+          await startCamera(cameraFacingMode || 'user');
+        } catch (camErr) {
+          log('ENROLL · Camera auto-start error: ' + (camErr?.message || ''));
+        }
+      }
+
+      // Ensure face engine and recognition models
+      await ensureFaceEngine();
+      await ensureFaceRecognition();
+
+      // Display HUD
+      const hud = $('#enrollmentHUD');
+      if (hud) hud.style.display = 'flex';
+      const nameBadge = $('#enrollmentHUDPersonName');
+      if (nameBadge) nameBadge.textContent = `ENROLLING ${cleanName.toUpperCase()}`;
+
+      // Reset HUD progress
+      this.updateHUDProgress(0);
+      this.renderStepInstructions();
+
+      // Audio greeting
+      cozmoSoundEngine?.playChirp?.(1.0);
+      setEmotion('curious');
+      devLog('ENROLL', `Biometric wizard started for: ${cleanName}`);
+
+      // Begin tick loop
+      this.scheduleNextTick();
+    }
+
+    scheduleNextTick() {
+      if (!this.active) return;
+      clearTimeout(this.loopTimer);
+      this.loopTimer = setTimeout(() => this.tick(), 140);
+    }
+
+    async tick() {
+      if (!this.active || this.inFlight) return;
+      this.inFlight = true;
+
+      try {
+        if (!cameraEnabled || !camera.videoWidth) {
+          this.setSubText('Waiting for camera feed...');
+          return;
+        }
+
+        const detection = await this.sampleCameraFrame();
+        const reticleContainer = $('#biometricReticleContainer');
+        const sampleState = $('#biometricSampleState');
+
+        if (!detection) {
+          this.stepSteadyTicks = 0;
+          this.stepHoldTicks = 0;
+          if (reticleContainer) reticleContainer.classList.remove('success');
+          if (sampleState) {
+            sampleState.textContent = 'NO FACE DETECTED';
+            sampleState.style.color = 'var(--coral)';
+          }
+          return;
+        }
+
+        const step = this.steps[this.currentStepIndex];
+        if (!step) return;
+
+        const isGoodAngle = step.evaluate(detection.detection.box, detection.landmarks);
+        this.stepHoldTicks++;
+
+        const passes = isGoodAngle ? (this.stepSteadyTicks++ >= 3) : (this.stepHoldTicks >= 14);
+
+        if (!passes) {
+          if (sampleState) {
+            sampleState.textContent = isGoodAngle ? 'HOLD STILL...' : 'ADJUST ANGLE';
+            sampleState.style.color = isGoodAngle ? 'var(--cyan)' : 'var(--amber)';
+          }
+          if (reticleContainer) reticleContainer.classList.toggle('success', isGoodAngle);
+        } else {
+          // STEP CAPTURED!
+          this.stepSteadyTicks = 0;
+          this.stepHoldTicks = 0;
+          if (sampleState) {
+            sampleState.textContent = 'CAPTURED!';
+            sampleState.style.color = 'var(--green)';
+          }
+          if (reticleContainer) reticleContainer.classList.add('success');
+
+          this.collectedSamples.push({
+            tag: step.tag,
+            stepIndex: this.currentStepIndex,
+            descriptor: Array.from(detection.descriptor)
+          });
+
+          cozmoSoundEngine?.playChirp?.(1.0 + (this.currentStepIndex + 1) * 0.12);
+          this.updateHUDProgress(step.pct);
+
+          devLog('ENROLL', `Step ${step.index + 1}/5 captured: ${step.tag}`);
+
+          this.currentStepIndex++;
+
+          if (this.currentStepIndex >= this.steps.length) {
+            await this.complete();
+            return;
+          } else {
+            this.renderStepInstructions();
+            await new Promise(r => setTimeout(r, 450));
+          }
+        }
+      } catch (err) {
+        console.warn('FaceEnrollmentWizard tick error:', err);
+      } finally {
+        this.inFlight = false;
+        if (this.active) this.scheduleNextTick();
+      }
+    }
+
+    async sampleCameraFrame() {
+      if (!window.faceapi || !faceapi.nets.tinyFaceDetector.params) return null;
+      try {
+        const detections = await faceapi
+          .detectAllFaces(camera, new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.08 }))
+          .withFaceLandmarks(true)
+          .withFaceDescriptors();
+
+        if (!detections || !detections.length) return null;
+        return detections.slice().sort((a, b) =>
+          (b.detection.box.width * b.detection.box.height) - (a.detection.box.width * a.detection.box.height)
+        )[0];
+      } catch (e) {
+        return null;
+      }
+    }
+
+    updateHUDProgress(pct) {
+      const ring = $('#biometricRing');
+      const percentEl = $('#biometricPercent');
+      if (ring) {
+        const offset = Math.max(0, this.circumference * (1 - (pct / 100)));
+        ring.style.strokeDashoffset = offset.toFixed(2);
+      }
+      if (percentEl) {
+        percentEl.textContent = `${Math.round(pct)}%`;
+      }
+    }
+
+    renderStepInstructions() {
+      const step = this.steps[this.currentStepIndex];
+      if (!step) return;
+      const stepLabel = $('#biometricStepLabel');
+      const actionText = $('#biometricActionText');
+      const subText = $('#biometricSubText');
+      if (stepLabel) stepLabel.textContent = step.label;
+      if (actionText) actionText.textContent = step.action;
+      if (subText) subText.textContent = step.sub;
+    }
+
+    setSubText(text) {
+      const subText = $('#biometricSubText');
+      if (subText) subText.textContent = text;
+    }
+
+    async complete() {
+      this.active = false;
+      clearTimeout(this.loopTimer);
+
+      const stepLabel = $('#biometricStepLabel');
+      const actionText = $('#biometricActionText');
+      const subText = $('#biometricSubText');
+      const sampleState = $('#biometricSampleState');
+      const reticleContainer = $('#biometricReticleContainer');
+
+      if (stepLabel) stepLabel.textContent = 'ALL 5 ANGLES ENROLLED';
+      if (actionText) actionText.textContent = `Welcome, ${this.targetPersonName}!`;
+      if (subText) subText.textContent = 'Biometric profile saved to Max\'s long-term memory';
+      if (sampleState) {
+        sampleState.textContent = 'SUCCESS';
+        sampleState.style.color = 'var(--green)';
+      }
+      if (reticleContainer) reticleContainer.classList.add('success');
+
+      cozmoSoundEngine?.playExcited?.();
+      setEmotion('happy');
+
+      const now = Date.now();
+      ensureMemoryRegistry();
+      let person = findPersonByName(this.targetPersonName);
+      if (!person) {
+        person = {
+          personId: 'person-' + now + '-' + Math.random().toString(36).slice(2, 8),
+          displayName: this.targetPersonName,
+          aliases: [],
+          relationship: normalizeMemoryText(this.targetRelationship),
+          facts: [],
+          preferences: {},
+          memories: [],
+          faceProfiles: [],
+          createdAt: now,
+          updatedAt: now
+        };
+        roboMemory.persons.push(person);
+      } else if (this.targetRelationship) {
+        person.relationship = normalizeMemoryText(this.targetRelationship);
+      }
+
+      if (!Array.isArray(person.faceProfiles)) person.faceProfiles = [];
+
+      this.collectedSamples.forEach((sample, i) => {
+        const record = {
+          id: 'face-wiz-' + now + '-' + i + '-' + Math.random().toString(36).slice(2, 7),
+          personId: person.personId,
+          displayName: person.displayName,
+          descriptor: Array.from(sample.descriptor),
+          angleTag: sample.tag,
+          source: 'biometric-wizard',
+          createdAt: now,
+          updatedAt: now,
+          lastUsedAt: now
+        };
+        person.faceProfiles.unshift(record);
+      });
+
+      if (person.faceProfiles.length > 8) {
+        person.faceProfiles = person.faceProfiles.slice(0, 8);
+      }
+
+      person.facts = Array.isArray(person.facts) ? person.facts : [];
+      person.facts = person.facts.filter(f => String(f.key || '').toLowerCase() !== 'name');
+      person.facts.unshift({
+        key: 'name',
+        value: this.targetPersonName,
+        source: 'biometric-wizard',
+        personId: person.personId,
+        createdAt: now,
+        updatedAt: now
+      });
+
+      person.updatedAt = now;
+      setActivePerson(person.personId, 'biometric-wizard');
+      savePersonProfile(person, 'biometric-wizard');
+      saveRoboMemory('biometric-wizard');
+
+      devLog('ENROLL', `Enrollment successfully completed for ${person.displayName} with ${this.collectedSamples.length} angle vectors`);
+
+      if (typeof speak === 'function') {
+        speak(`Face enrollment complete for ${person.displayName}! I have memorized all five angles into my long-term memory.`, 'en');
+      }
+
+      if (typeof renderMemoryIdentity === 'function') renderMemoryIdentity();
+      if (typeof renderMemoryDiagnostics === 'function') renderMemoryDiagnostics();
+      if (typeof syncLiveIdentityAndSocial === 'function') syncLiveIdentityAndSocial('biometric-enrollment-complete');
+
+      setTimeout(() => {
+        this.cancel();
+      }, 2200);
+    }
+
+    cancel() {
+      this.active = false;
+      clearTimeout(this.loopTimer);
+      const hud = $('#enrollmentHUD');
+      if (hud) hud.style.display = 'none';
+      const reticleContainer = $('#biometricReticleContainer');
+      if (reticleContainer) reticleContainer.classList.remove('success');
+      this.closePromptModal();
+      devLog('ENROLL', 'Biometric wizard closed / cancelled');
+    }
+  }
+
+  const faceEnrollmentWizard = new FaceEnrollmentWizard();
+  window.faceEnrollmentWizard = faceEnrollmentWizard;
 
   function startMicMeter(stream){
     try{
@@ -7937,6 +8716,7 @@ function runDevChecks(){
       ["Multi-person memory registry",!!(roboMemory&&Array.isArray(roboMemory.persons)&&roboMemory.persons.length>0)],
       ["Active identity resolver",typeof findFaceMatch==="function"&&typeof setActivePerson==="function"],
       ["Live face → social coupling",typeof deriveLiveSocialFromFaces==="function"],
+      ["Module 8.5 Face enrollment wizard", (()=>{ try{ return Boolean(window.faceEnrollmentWizard); }catch(_){ return false; } })()],
       ["Module 9 Cozmo sound FX engine", (()=>{ try{ return Boolean(cozmoSoundEngine); }catch(_){ return false; } })()],
       ["Module 10 intent & action engine", (()=>{ try{ return Boolean(robotActionEngine); }catch(_){ return false; } })()],
       ["Module 11 planning & autonomy", (()=>{ try{ return Boolean(autonomousPlanner); }catch(_){ return false; } })()],
@@ -8070,6 +8850,30 @@ function runDevChecks(){
   if(screenCamSwitch2) screenCamSwitch2.addEventListener("click", () => switchCamera());
   $("#cameraBox")?.addEventListener("click", () => {
     if(!cameraEnabled && !window.__roboCameraStarting) toggleCamera().catch(err => log('CAM · tap open notice · ' + (err?.name || '')));
+  });
+
+  // Phase C: Biometric Face Enrollment Controls (Module 8.5)
+  $("#enrollFaceBtn")?.addEventListener("click", () => {
+    if (window.faceEnrollmentWizard) window.faceEnrollmentWizard.openPromptModal();
+  });
+  $("#enrollModalCancelBtn")?.addEventListener("click", () => {
+    if (window.faceEnrollmentWizard) window.faceEnrollmentWizard.closePromptModal();
+  });
+  $("#enrollModalStartBtn")?.addEventListener("click", () => {
+    const name = $("#enrollNameInput")?.value;
+    const rel = $("#enrollRelationInput")?.value;
+    if (window.faceEnrollmentWizard) window.faceEnrollmentWizard.start(name, rel);
+  });
+  $("#enrollNameInput")?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      const name = $("#enrollNameInput")?.value;
+      const rel = $("#enrollRelationInput")?.value;
+      if (window.faceEnrollmentWizard) window.faceEnrollmentWizard.start(name, rel);
+    }
+  });
+  $("#enrollCancelBtn")?.addEventListener("click", () => {
+    if (window.faceEnrollmentWizard) window.faceEnrollmentWizard.cancel();
   });
 
   // Gemini Live Controls
