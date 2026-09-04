@@ -5567,13 +5567,13 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
       this.thinkingTimeoutTimer = null;
       this.lastSpeechAt = 0;
       this.lastSpokenEndedAt = 0;
-      this.CONVERSATION_WINDOW_MS = 10000;
+      this.CONVERSATION_WINDOW_MS = 15000; // 15s continuous conversation window like Gemini Live
       this.lastErrorCode = '';
       this.transcriptBuffer = '';
       this.wakeCount = 0;
       this.bargeInCount = 0;
       this.utteranceCount = 0;
-      this.currentVadDelay = 950;
+      this.currentVadDelay = 850;
     }
 
     isInActiveConversation() {
@@ -5587,10 +5587,16 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
     isWakeToken(token) {
       const t = this.normalize(token);
       if (!t) return false;
-      if (WAKE_WORDS.includes(t)) return true;
-      // Phonetic pattern: starts with 'm', length 3-5, ends in x/k/c/s/g/t
-      if (/^m[a-z]{1,2}(?:x|k|ck|c|ks|s|g|t)$/i.test(t)) return true;
-      if (t.length >= 2 && t.length <= 6) {
+      // High-confidence phonetic wake words for Max / Cozmo
+      const exactWake = [
+        'max', 'maxy', 'maxie', 'maxi', 'maks', 'macks', 'mack', 'mac', 'maxx', 'mex',
+        'heymax', 'okmax', 'himax', 'hellomax', 'yomax',
+        'cozmo', 'cosmo', 'ozmo', 'osmo', 'robo', 'robot'
+      ];
+      if (exactWake.includes(t)) return true;
+
+      // Levenshtein distance <= 1 for tokens of length 3-5 starting with 'm'
+      if (t.length >= 3 && t.length <= 5 && t[0] === 'm') {
         const target = 'max';
         let prev = [0, 1, 2, 3];
         for (let i = 1; i <= t.length; i++) {
@@ -5602,18 +5608,6 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
         }
         if (prev[3] <= 1) return true;
       }
-      if (t.length >= 3 && t.length <= 7) {
-        const target = 'ozmo';
-        let prev = [0, 1, 2, 3, 4];
-        for (let i = 1; i <= t.length; i++) {
-          const cur = [i];
-          for (let j = 1; j <= target.length; j++) {
-            cur[j] = Math.min(cur[j - 1] + 1, prev[j] + 1, prev[j - 1] + (t[i - 1] === target[j - 1] ? 0 : 1));
-          }
-          prev = cur;
-        }
-        if (prev[4] <= 1) return true;
-      }
       return false;
     }
 
@@ -5623,32 +5617,37 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
       if (!clean) return { woken: false, command: '' };
 
       // 1. Standalone action commands that wake Max directly
-      if (/^(?:please\s+)?(?:go\s+live|start\s+live|live\s+mode|wake\s+up|listen\s+up|listen\s+to\s+me)\b/i.test(clean)) {
+      if (/^(?:please\s+)?(?:go\s+live|start\s+live|live\s+mode|live\s+stream|wake\s+up|listen\s+up|listen\s+to\s+me)\b/i.test(clean)) {
         return { woken: true, command: clean };
       }
 
-      // 2. Direct regex match on full clean string
-      const wakeRegex = /\b(?:hey|hi|hello|ok|okay|yo|listen|wake\s+up)?\s*(max|mac|mack|maks|macks|maxy|maxie|mex|mix|mag|mags|meg|mat|matt|mats|match|mask|mass|mark|marks|mike|mick|make|makes|next|cozmo|cosmo|ozmo|osmo|robo|robot)\b/i;
-      const match = clean.match(wakeRegex);
+      // 2. Comprehensive Wake Pattern Matching (beginning, middle, or end of sentence)
+      const wakePattern = /\b(?:hey|hi|hello|ok|okay|yo|listen|wake\s+up)?\s*(max|maxy|maxie|maks|macks|mack|mac|maxx|mex|cozmo|cosmo|ozmo|osmo|robo|robot)\b/i;
+      const match = clean.match(wakePattern);
       if (match) {
+        const matchStart = match.index;
         const matchEnd = match.index + match[0].length;
-        const command = clean.slice(matchEnd).trim();
+        let commandAfter = clean.slice(matchEnd).trim();
+        let commandBefore = clean.slice(0, matchStart).trim();
+
+        let command = '';
+        if (commandAfter) command = commandAfter;
+        else if (commandBefore) command = commandBefore;
+
         return { woken: true, command };
       }
 
-      // 3. Fallback token-by-token check
+      // 3. Multi-token scan fallback
       const tokens = clean.split(' ');
-      let wakeIndex = -1;
       for (let i = 0; i < tokens.length; i++) {
-        if (['hey', 'hi', 'hello', 'ok', 'okay', 'yo'].includes(tokens[i])) continue;
-        if (this.isWakeToken(tokens[i])) {
-          wakeIndex = i;
-          break;
+        const token = tokens[i];
+        if (['hey', 'hi', 'hello', 'ok', 'okay', 'yo'].includes(token)) continue;
+        if (this.isWakeToken(token)) {
+          const before = tokens.slice(0, i).filter(t => !['hey', 'hi', 'hello', 'ok', 'okay', 'yo'].includes(t)).join(' ').trim();
+          const after = tokens.slice(i + 1).join(' ').trim();
+          const command = after || before || '';
+          return { woken: true, command };
         }
-      }
-      if (wakeIndex >= 0) {
-        const commandTokens = tokens.slice(wakeIndex + 1);
-        return { woken: true, command: commandTokens.join(' ').trim() };
       }
 
       return { woken: false, command: '' };
@@ -5661,7 +5660,7 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
       }
       this.armed = true;
       log('VOICE · engine armed · ' + reason);
-      this.scheduleRestart(50);
+      this.scheduleRestart(15);
       return true;
     }
 
@@ -5734,7 +5733,7 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
           this.armed = false;
           setVoiceStatus('MIC BLOCKED · permission required');
         } else {
-          this.scheduleRestart(600);
+          this.scheduleRestart(300);
         }
       }
     }
@@ -5745,12 +5744,16 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
         let bargeInText = '';
         for (let i = e.resultIndex; i < e.results.length; i++) {
           const res = e.results[i];
-          const alt = res && res[0];
-          if (alt && alt.transcript) {
-            bargeInText += (bargeInText ? ' ' : '') + String(alt.transcript).trim();
+          if (!res) continue;
+          for (let a = 0; a < res.length; a++) {
+            const alt = res[a];
+            if (alt && alt.transcript && alt.transcript.trim()) {
+              bargeInText = alt.transcript.trim();
+              break;
+            }
           }
+          if (bargeInText) break;
         }
-        bargeInText = bargeInText.trim();
         if (bargeInText.length >= 1) {
           this.bargeInCount++;
           const bCountEl = document.getElementById('devBargeInCount');
@@ -5763,68 +5766,102 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
         }
         return;
       }
-      if (performance.now() - this.lastSpokenEndedAt < 300) {
+
+      if (performance.now() - this.lastSpokenEndedAt < 250) {
         return;
       }
 
-      let finalText = '';
-      let interimText = '';
+      // Check all alternatives across current results to maximize wake & speech accuracy
+      let bestFinalText = '';
+      let bestInterimText = '';
+      let detectedWakeFromAlt = null;
+
       for (let i = e.resultIndex; i < e.results.length; i++) {
         const res = e.results[i];
-        const alt = res && res[0];
-        if (!alt) continue;
-        const tx = String(alt.transcript || '').trim();
-        if (!tx) continue;
-        if (res.isFinal) finalText += (finalText ? ' ' : '') + tx;
-        else interimText += (interimText ? ' ' : '') + tx;
+        if (!res) continue;
+
+        const primary = res[0];
+        if (primary && primary.transcript) {
+          const tx = String(primary.transcript).trim();
+          if (res.isFinal) bestFinalText += (bestFinalText ? ' ' : '') + tx;
+          else bestInterimText += (bestInterimText ? ' ' : '') + tx;
+        }
+
+        // Multi-alternative scan specifically for wake phrase in STANDBY_WAKE mode
+        if (this.mode === VoiceMode.STANDBY_WAKE && !detectedWakeFromAlt) {
+          for (let a = 0; a < Math.min(res.length, 3); a++) {
+            const alt = res[a];
+            if (alt && alt.transcript) {
+              const parsed = this.parseWakeUtterance(alt.transcript);
+              if (parsed.woken) {
+                detectedWakeFromAlt = { spoken: alt.transcript, parsed };
+                break;
+              }
+            }
+          }
+        }
       }
 
-      const spoken = (finalText || interimText).trim();
-      if (!spoken) return;
+      const spoken = (bestFinalText || bestInterimText).trim();
+      if (!spoken && !detectedWakeFromAlt) return;
       this.lastSpeechAt = performance.now();
-      this.transcriptBuffer = spoken;
 
       // MODE 1: STANDBY WAKE
       if (this.mode === VoiceMode.STANDBY_WAKE) {
-        const parsed = this.parseWakeUtterance(spoken);
+        const candidateSpoken = detectedWakeFromAlt ? detectedWakeFromAlt.spoken : spoken;
+        const parsed = detectedWakeFromAlt ? detectedWakeFromAlt.parsed : this.parseWakeUtterance(candidateSpoken);
         if (!parsed.woken) return;
 
         this.wakeCount++;
         const wCountEl = document.getElementById('devWakeCount');
         if (wCountEl) wCountEl.textContent = this.wakeCount;
 
-        log('VOICE · wake phrase detected', { spoken, command: parsed.command });
+        log('VOICE · wake phrase detected', { spoken: candidateSpoken, command: parsed.command });
 
+        // If user spoke wake word with a direct command: "Hey Max, what's the capital of Japan?"
         if (parsed.command) {
           if (/\b(?:go live|start live|live mode|live stream|live conversation|switch to live)\b/i.test(parsed.command)) {
             geminiLiveClient.start();
             return;
           }
           this.utteranceCount++;
+          playCozmoWakeChime();
           this.setMode(VoiceMode.THINKING);
           setState('listening', 'Max heard: ' + parsed.command);
           showCaption('MAX HEARS\n' + parsed.command, true);
-          setTimeout(() => respond(parsed.command).catch(err => log('RESPOND ERROR · ' + (err?.message || err))), 40);
+          setTimeout(() => respond(parsed.command).catch(err => log('RESPOND ERROR · ' + (err?.message || err))), 30);
           return;
         }
 
-        // Spoke wake word ("Max" / "Hey Max") without command:
-        // Play instant Cozmo robot chirp and open active listening window without mic blockage!
+        // User spoke wake word alone ("Max" / "Hey Max"):
+        // Play instant Cozmo wake chime, perk up face, and open active listening window
         playCozmoWakeChime();
         this.setMode(VoiceMode.ACTIVE_LISTENING);
         setState('happy', 'Max acknowledged wake word');
-        showCaption('MAX\nListening!', true);
-        setVoiceStatus('MAX LISTENING · speak your command…', 4000);
+        showCaption('MAX LISTENING\nListening to you…', true);
+        setVoiceStatus('MAX LISTENING · speak your command…', 4500);
         return;
       }
 
-      // MODE 2 & 3: ACTIVE_LISTENING or ACTIVE_CONVERSATION
+      // MODE 2 & 3: ACTIVE_LISTENING or ACTIVE_CONVERSATION (Continuous Talking Mode)
       if (this.mode === VoiceMode.ACTIVE_LISTENING || this.mode === VoiceMode.ACTIVE_CONVERSATION) {
         showCaption('MAX HEARS\n' + spoken, true);
         if (devTranscript) devTranscript.textContent = spoken;
-        if (devStage) devStage.textContent = finalText ? 'FINAL TRANSCRIPT' : 'TRANSCRIBING…';
+        if (devStage) devStage.textContent = bestFinalText ? 'FINAL TRANSCRIPT' : 'TRANSCRIBING…';
 
         clearTimeout(this.silenceTimer);
+
+        // Check for graceful conversation exit commands ("bye", "goodbye", "stop", "cancel", "that's all", "sleep")
+        if (CONVERSATION_STOP_RE.test(spoken.trim())) {
+          this.transcriptBuffer = '';
+          log('VOICE · user ended conversation with stop command · ' + spoken);
+          this.setMode(VoiceMode.STANDBY_WAKE);
+          cozmoSoundEngine?.playChirp(0.9);
+          setState('curious', 'standing by');
+          showCaption('MAX\nStanding by!', true);
+          hideCaption(2000);
+          return;
+        }
 
         // Check if the user just repeated the wake word in active mode:
         const parsed = this.parseWakeUtterance(spoken);
@@ -5833,16 +5870,21 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
           return;
         }
 
-        // Buffer the ongoing spoken text
-        this.transcriptBuffer = spoken;
+        // Strip leading wake word if present in ongoing phrase
+        let cleanQuery = spoken;
+        if (parsed.woken && parsed.command) {
+          cleanQuery = parsed.command;
+        }
+
+        this.transcriptBuffer = cleanQuery;
 
         // Adaptive VAD Debounce:
-        // Complete questions or crisp statements debounce at 850ms for snappy responsiveness.
-        // Clauses ending with conjunctions wait 1600ms so user has time to finish their thought.
-        const trimmed = spoken.trim().toLowerCase();
+        // Complete questions or crisp statements debounce at 750ms for snappy responsiveness.
+        // Incomplete clauses ending with conjunctions wait 1600ms so user has time to finish their thought.
+        const trimmed = cleanQuery.trim().toLowerCase();
         const isIncompleteClause = /\b(and|or|but|because|with|that|to|about|in|at|if|then|is|are|the|a|an|of|for|as)\s*$/i.test(trimmed);
-        const isQuestion = /\?$/.test(spoken.trim()) || /^(?:what|who|where|when|why|how|can|could|tell|is|are|do|does)\b/i.test(trimmed);
-        const debounceMs = isIncompleteClause ? 1600 : (isQuestion && finalText ? 850 : (finalText ? 950 : 1350));
+        const isQuestion = /\?$/.test(cleanQuery.trim()) || /^(?:what|who|where|when|why|how|can|could|tell|is|are|do|does)\b/i.test(trimmed);
+        const debounceMs = isIncompleteClause ? 1600 : (isQuestion && bestFinalText ? 750 : (bestFinalText ? 850 : 1300));
         this.currentVadDelay = debounceMs;
 
         const vadEl = document.getElementById('devVadStatus');
@@ -5893,7 +5935,8 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
         return;
       }
 
-      const delay = code === 'no-speech' ? 120 : (code === 'network' ? 600 : 350);
+      // Immediate hot-restart on no-speech or transient error (<15ms)
+      const delay = code === 'no-speech' ? 10 : (code === 'network' ? 300 : 120);
       this.scheduleRestart(delay);
     }
 
@@ -5909,11 +5952,11 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
       }
       if (talking || aiRequestInFlight) return;
 
-      const delay = (this.mode === VoiceMode.ACTIVE_CONVERSATION || this.mode === VoiceMode.ACTIVE_LISTENING) ? 100 : 250;
-      this.scheduleRestart(delay);
+      // Hot-restart in 15ms so there is ZERO dead window!
+      this.scheduleRestart(15);
     }
 
-    scheduleRestart(delay = 250) {
+    scheduleRestart(delay = 15) {
       if (!this.armed) return;
       if (window.geminiLiveClient && (window.geminiLiveClient.connected || window.geminiLiveClient.connecting || window.geminiLiveClient.liveModeActive)) {
         return; // Gemini Live mode owns the microphone
@@ -5923,7 +5966,7 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
       this.restartTimer = setTimeout(() => {
         this.restartTimer = null;
         this.start();
-      }, Math.max(20, delay));
+      }, Math.max(10, delay));
     }
 
     setMode(newMode) {
@@ -5946,14 +5989,16 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
         }, 12000);
       }
 
+      // Continuous Multi-Turn Dialogue Timeout (15s window)
       if (newMode === VoiceMode.ACTIVE_CONVERSATION) {
         this.conversationTimeoutTimer = setTimeout(() => {
           if (this.mode === VoiceMode.ACTIVE_CONVERSATION) {
-            log('VOICE · conversation window expired · returning to standby');
+            log('VOICE · continuous conversation window expired · returning to standby');
             this.setMode(VoiceMode.STANDBY_WAKE);
+            cozmoSoundEngine?.playCoo();
             setState('curious', 'curious · standing by');
             setVoiceStatus('MAX READY · say “Max” to talk');
-            hideCaption(1200);
+            hideCaption(1500);
           }
         }, this.CONVERSATION_WINDOW_MS);
       }
@@ -5967,10 +6012,11 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
 
     onSpeechFinished() {
       this.lastSpokenEndedAt = performance.now();
+      // Instantly open continuous conversational follow-up window (Gemini Live style)
       this.setMode(VoiceMode.ACTIVE_CONVERSATION);
-      setVoiceStatus('MAX LISTENING · speak your follow-up…');
-      setState('listening', 'Max listening on active topic…');
-      showCaption('MAX LISTENING\nListening to your follow-up…', true);
+      setVoiceStatus('MAX LISTENING · speak naturally…');
+      setState('listening', 'Max listening · continuous dialogue…');
+      showCaption('MAX LISTENING\nSpeak naturally — Max is listening…', true);
 
       if (!this.running && !this.starting) {
         this.start();
@@ -5980,6 +6026,7 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
     triggerManualListening() {
       aiRequestInFlight = false;
       this.arm('manual mic click');
+      playCozmoWakeChime();
       this.setMode(VoiceMode.ACTIVE_LISTENING);
       setState('listening', 'Max listening · capturing speech');
       setVoiceStatus('MIC ACTIVE · speak now…');
@@ -6067,7 +6114,7 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
     if (voiceEngine.armed && !voiceEngine.running && !voiceEngine.starting && !talking && !aiRequestInFlight) {
       voiceEngine.start();
     }
-  }, 2000);
+  }, 1000);
 
   /* ==========================================================================
      ROBO AIOS — GEMINI MULTIMODAL LIVE STREAMING CLIENT (APPROACH B)
