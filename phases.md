@@ -152,7 +152,7 @@ state — never leave the app broken between phases.
 
 ---
 
-## Active Enhancement Track: Phases A, B, C
+## Active Enhancement Track: Phases A, B, C, D
 
 ### Phase A — Voice Recognition & Dev Diagnostics Overhaul [COMPLETED]
 - Purged redundant SpeechRecognition wrappers and memory leaks.
@@ -176,5 +176,18 @@ state — never leave the app broken between phases.
 - Multi-angle descriptor vectors stored in persistent `roboMemory.persons` profile.
 - Integrated into `runDevChecks()` as `Module 8.5 Face enrollment wizard` (`PASS`).
 - Voice intent integration ("enroll my face", "start face enrollment").
+
+### Phase D (Phase 6) — Advanced Intelligence & Autonomous Behavior Engine [COMPLETED]
+- **Multimodal Visual Reasoning & Scene Grounding**:
+  - Expanded implicit visual intent recognition ("who is in front of you", "what am I holding", "describe room", "look at this").
+  - Seamless scene continuity: cached visual observations inject directly into conversation context.
+- **Proactive Cozmo Personality & Curiosity Routines**:
+  - Proactive arrival greeting: detects registered users by name with excited chirp and eye greeting.
+  - Idle exploration cycles: organic micro-saccades, curious looking around (`turnLeft`, `turnRight`, `idleNod`), and sleepy yawn after extended inactivity.
+- **Autonomous Physical & Virtual Intent Planning**:
+  - Choreographed physical action routines (`dance`, `spin`, `nod`, `shakeHead`, `celebrate`) coupled with procedural Cozmo sound effects and OLED emotion states.
+  - Precise visual servoing: calculates center coordinates against video frame dimensions.
+  - Live autonomy telemetry readout (`#devAutonomyStatus`) in Dev screen.
+
 
 

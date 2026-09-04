@@ -812,6 +812,7 @@ button{font:inherit}
                 <button class="devAction" id="gestureDanceBtn">DANCE</button>
                 <button class="devAction" id="gestureSpinBtn">SPIN</button>
                 <button class="devAction active" id="autonomyToggleBtn">AUTONOMY: ON</button>
+                <span id="devAutonomyStatus" style="font-size:7.5px;color:#7ee59a;font-weight:700;letter-spacing:.08em;margin-left:8px;">AUTONOMY: ACTIVE · IDLE</span>
               </div>
             </section>
 
@@ -1975,8 +1976,11 @@ button{font:inherit}
     const name = person.displayName.trim();
     devLog('COZMO', `Recognized ${name} · triggering proactive Cozmo greeting`);
 
-    // Cozmo joyful face perk and happy state
+    // Cozmo joyful face perk and happy state + excited procedural audio
     setState('happy', `recognized · ${name}`);
+    if (typeof cozmoSoundEngine !== 'undefined' && cozmoSoundEngine) {
+      cozmoSoundEngine.playExcited();
+    }
     if (typeof autonomousPlanner !== 'undefined' && autonomousPlanner?.action) {
       autonomousPlanner.action.nod();
     }
@@ -7605,18 +7609,21 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
     const l=(text||'').toLowerCase().trim();
     return (
       /\b(see|seeing|look|looking|camera|image|picture|photo|screen|display|visible|shown)\b/.test(l) ||
-      /\bwhat\s+(do\s+you|can\s+you)\s+see\b/.test(l) ||
-      /\bwhat.*in\s+front\s+of\s+me\b/.test(l) ||
-      /\bwhat.*around\s+me\b/.test(l) ||
-      /\bdescribe.*scene\b/.test(l) ||
-      /\bidentify.*object\b/.test(l) ||
-      /\bwhat.*(holding|carrying|wearing|in my hand)\b/.test(l) ||
+      /\bwhat\s+(do\s+you|can\s+you)\s+(see|look\s+at)\b/.test(l) ||
+      /\bwho\s+(is|are)\s+(this|that|in\s+front|visible|there)\b/.test(l) ||
+      /\b(do\s+you|can\s+you)\s+(know|recognize|identify)\s+(me|this|that|who)\b/.test(l) ||
+      /\bwhat.*in\s+front\s+of\s+(me|you)\b/.test(l) ||
+      /\bwhat.*around\s+(me|you)\b/.test(l) ||
+      /\bdescribe.*(scene|room|surroundings|view)\b/.test(l) ||
+      /\bidentify.*(object|person|item|face)\b/.test(l) ||
+      /\bwhat.*(holding|carrying|wearing|in my hand|in front of)\b/.test(l) ||
       /\bwhat.*(is|are)\s+(this|that|these|those)\b/.test(l) ||
       /\bwhat.*(object|objects|item|items)\b/.test(l) ||
+      /\b(look\s+at\s+this|take\s+a\s+look|look\s+here)\b/.test(l) ||
       /\bhow many\b/.test(l) ||
       /\b(kya|kya hai|kya dikh|dikhta|dikhti|dikhao|dekho|dekh|batao|bata)\b/.test(l) ||
-      /\b(kya\s+dekh|kya\s+dikh|kitne|kitni|kaunsa|kaunsi|kaun)\b/.test(l) ||
-      /\b(क्या|दिख|दिखाओ|देख|देखो|कितने|कितनी|कौन|क्या है)\b/.test(l)
+      /\b(kya\s+dekh|kya\s+dikh|kitne|kitni|kaunsa|kaunsi|kaun|pehchana|pehchano)\b/.test(l) ||
+      /\b(क्या|दिख|दिखाओ|देख|देखो|कितने|कितनी|कौन|पहचान|पहचाना|क्या है)\b/.test(l)
     );
   }
 
@@ -9757,6 +9764,7 @@ function hookRecognitionDiagnostics(r){
       if (this.isPerformingAction) return;
       this.isPerformingAction = true;
       setState('happy', 'action · nod');
+      if (typeof cozmoSoundEngine !== 'undefined' && cozmoSoundEngine) cozmoSoundEngine.playChirp(1.2);
       this.conn.drive(30, 30, 180);
       await new Promise(r => setTimeout(r, 220));
       this.conn.drive(-30, -30, 180);
@@ -9769,6 +9777,7 @@ function hookRecognitionDiagnostics(r){
       if (this.isPerformingAction) return;
       this.isPerformingAction = true;
       setState('confused', 'action · shake head');
+      if (typeof cozmoSoundEngine !== 'undefined' && cozmoSoundEngine) cozmoSoundEngine.playCurious();
       this.conn.drive(-35, 35, 180);
       await new Promise(r => setTimeout(r, 220));
       this.conn.drive(35, -35, 360);
@@ -9783,6 +9792,7 @@ function hookRecognitionDiagnostics(r){
       if (this.isPerformingAction) return;
       this.isPerformingAction = true;
       setState('excited', 'action · dancing');
+      if (typeof cozmoSoundEngine !== 'undefined' && cozmoSoundEngine) cozmoSoundEngine.playExcited();
       for (let i = 0; i < 3; i++) {
         this.conn.drive(38, -38, 220);
         await new Promise(r => setTimeout(r, 250));
@@ -9798,6 +9808,7 @@ function hookRecognitionDiagnostics(r){
       if (this.isPerformingAction) return;
       this.isPerformingAction = true;
       setState('excited', 'action · spinning');
+      if (typeof cozmoSoundEngine !== 'undefined' && cozmoSoundEngine) cozmoSoundEngine.playChirp(1.4);
       this.conn.drive(45, -45, 1400);
       await new Promise(r => setTimeout(r, 1450));
       this.conn.stop();
@@ -9809,6 +9820,7 @@ function hookRecognitionDiagnostics(r){
       if (this.isPerformingAction) return;
       this.isPerformingAction = true;
       setState('love', 'action · celebrate');
+      if (typeof cozmoSoundEngine !== 'undefined' && cozmoSoundEngine) cozmoSoundEngine.playExcited();
       this.conn.drive(35, 35, 200);
       await new Promise(r => setTimeout(r, 220));
       this.conn.drive(-35, -35, 200);
@@ -9942,6 +9954,7 @@ function hookRecognitionDiagnostics(r){
       this.lastFaceAlignmentAt = 0;
       this.lastSocialGreetingPersonId = null;
       this.idleAutonomyTimer = null;
+      this.status = 'ACTIVE · IDLE';
     }
 
     start() {
@@ -9953,10 +9966,28 @@ function hookRecognitionDiagnostics(r){
       if (this.idleAutonomyTimer) clearInterval(this.idleAutonomyTimer);
     }
 
+    updateStatus(text, color='#7ee59a') {
+      this.status = text;
+      const el = document.getElementById('devAutonomyStatus');
+      if (el) {
+        el.textContent = `AUTONOMY: ${text}`;
+        el.style.color = color;
+      }
+    }
+
     tickAutonomy() {
-      if (!this.autonomyEnabled) return;
-      if (this.conn.watchdog.isEmergencyStopped || this.conn.watchdog.isWatchdogTripped) return;
-      if (talking || listening || aiRequestInFlight) return;
+      if (!this.autonomyEnabled) {
+        this.updateStatus('PAUSED', '#8f98aa');
+        return;
+      }
+      if (this.conn?.watchdog?.isEmergencyStopped || this.conn?.watchdog?.isWatchdogTripped) {
+        this.updateStatus('E-STOPPED / SAFETY LOCK', '#ff7777');
+        return;
+      }
+      if (talking || listening || aiRequestInFlight) {
+        this.updateStatus('CONVERSATION ENGAGED', '#69d8cf');
+        return;
+      }
 
       const now = Date.now();
 
@@ -9964,17 +9995,24 @@ function hookRecognitionDiagnostics(r){
       if (cameraEnabled && activeFaceTarget?.personId && activeFaceTarget?.box) {
         const box = activeFaceTarget.box;
         if (isValidFaceBox(box) && now - this.lastFaceAlignmentAt > 900) {
-          const faceCenterX = (box.left + box.width / 2) / 100;
+          const vw = Math.max(1, camera?.videoWidth || 720);
+          const bx = Number(box.x) || Number(box.left) || 0;
+          const bw = Number(box.width) || 120;
+          const faceCenterX = (bx + bw / 2) / vw;
           if (faceCenterX < 0.38) {
             this.lastFaceAlignmentAt = now;
+            this.updateStatus(`ALIGNING LEFT (${activeFaceTarget.name || 'TARGET'})`, '#f0b45b');
             devLog('AUTONOMY', `Face target off-center left (${faceCenterX.toFixed(2)}) · nudging chassis left`);
             this.action.turnLeft(220);
             return;
           } else if (faceCenterX > 0.62) {
             this.lastFaceAlignmentAt = now;
+            this.updateStatus(`ALIGNING RIGHT (${activeFaceTarget.name || 'TARGET'})`, '#f0b45b');
             devLog('AUTONOMY', `Face target off-center right (${faceCenterX.toFixed(2)}) · nudging chassis right`);
             this.action.turnRight(220);
             return;
+          } else {
+            this.updateStatus(`CENTERED ON ${activeFaceTarget.name || 'TARGET'}`, '#7ee59a');
           }
         }
       }
@@ -9986,6 +10024,7 @@ function hookRecognitionDiagnostics(r){
           this.lastFaceAlignmentAt = now;
           const person = roboMemory?.persons?.find(p => p.personId === activeFaceTarget.personId);
           if (person && typeof triggerCozmoGreeting === 'function') {
+            this.updateStatus(`GREETING ${person.displayName || 'HUMAN'}`, '#c084fc');
             triggerCozmoGreeting(person);
           } else {
             this.action.nod();
@@ -9999,26 +10038,43 @@ function hookRecognitionDiagnostics(r){
       // Tier 3: Curiosity Exploration Nudges (looking around when idle)
       if (autoIdleEnabled && now - lastActivity > 18000 && now - this.lastFaceAlignmentAt > 14000) {
         this.lastFaceAlignmentAt = now;
-        const choices = ['lookLeft', 'lookRight', 'idleNod'];
+        const choices = ['lookLeft', 'lookRight', 'idleNod', 'cozmoChirp'];
         const choice = choices[Math.floor(Math.random() * choices.length)];
+        this.updateStatus(`EXPLORING (${choice.toUpperCase()})`, '#f0b45b');
         devLog('AUTONOMY', `Idle exploration behavior · ${choice}`);
         if (choice === 'lookLeft') this.action.turnLeft(200);
         else if (choice === 'lookRight') this.action.turnRight(200);
         else if (choice === 'idleNod') this.action.nod();
+        else if (choice === 'cozmoChirp') {
+          if (typeof cozmoSoundEngine !== 'undefined' && cozmoSoundEngine) {
+            cozmoSoundEngine.playCurious();
+            setState('curious', 'idle · exploring surroundings');
+          }
+        }
         return;
       }
 
       // Tier 4: Boredom / Sleepiness Cycle on extended inactivity (>55s with no human presence)
       if (autoIdleEnabled && now - lastActivity > 55000 && socialAwareness?.humanPresence === 'no-person') {
         if (state !== 'sleepy') {
+          this.updateStatus('SNOOZING (EXTENDED IDLE)', '#8f98aa');
           devLog('AUTONOMY', 'Extended inactivity · Max is gently snoozing');
+          if (typeof cozmoSoundEngine !== 'undefined' && cozmoSoundEngine) {
+            cozmoSoundEngine.playYawn();
+          }
           setState('sleepy', 'idle · snoozing');
         }
       } else if (state === 'sleepy' && socialAwareness?.humanPresence === 'present') {
         // As soon as a human arrives, perk up immediately!
+        this.updateStatus('PERKED UP · HUMAN DETECTED', '#7ee59a');
         devLog('AUTONOMY', 'Human detected · perking up from snooze');
+        if (typeof cozmoSoundEngine !== 'undefined' && cozmoSoundEngine) {
+          cozmoSoundEngine.playCoo();
+        }
         setState('curious', 'perked up · human detected');
         lastActivity = now;
+      } else {
+        this.updateStatus('ACTIVE · STANDING BY', '#7ee59a');
       }
     }
   }
