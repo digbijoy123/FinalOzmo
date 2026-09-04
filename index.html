@@ -1112,7 +1112,7 @@ button{font:inherit}
   const FACE_DISPLAY_HOLD_MS = 800;
   const FACE_TARGET_REACQUIRE_WINDOW_MS = 2800;
   const FACE_IDENTITY_RELEASE_MS = 2800;
-  const FACE_DETECT_INTERVAL_MS = 90;
+  const FACE_DETECT_INTERVAL_MS = 150;
   const FACE_SMOOTH_ALPHA = 0.58;
   const FACE_RECOGNITION_INTERVAL_MS = 1600;
   const LIVE_IDENTITY_REFRESH_MS = 1600;
@@ -6422,26 +6422,32 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
     isWakeToken(token) {
       const t = this.normalize(token);
       if (!t) return false;
-      // High-confidence phonetic wake words for Max / Cozmo
+      // High-confidence phonetic wake words for Max / Cozmo across mobile STT models
       const exactWake = [
         'max', 'maxy', 'maxie', 'maxi', 'maks', 'macks', 'mack', 'mac', 'maxx', 'mex',
-        'heymax', 'okmax', 'himax', 'hellomax', 'yomax',
+        'mark', 'marks', 'matt', 'matts', 'match', 'matches', 'mask', 'masks', 'mags', 'magz',
+        'make', 'makes', 'mike', 'mikes', 'mix', 'map', 'maps', 'next', 'nex', 'axe',
+        'heymax', 'okmax', 'himax', 'hellomax', 'yomax', 'amax',
+        'heymark', 'heymarks', 'heymak', 'heymaks',
         'cozmo', 'cosmo', 'ozmo', 'osmo', 'robo', 'robot'
       ];
       if (exactWake.includes(t)) return true;
 
-      // Levenshtein distance <= 1 for tokens of length 3-5 starting with 'm'
-      if (t.length >= 3 && t.length <= 5 && t[0] === 'm') {
-        const target = 'max';
-        let prev = [0, 1, 2, 3];
-        for (let i = 1; i <= t.length; i++) {
-          const cur = [i];
-          for (let j = 1; j <= target.length; j++) {
-            cur[j] = Math.min(cur[j - 1] + 1, prev[j] + 1, prev[j - 1] + (t[i - 1] === target[j - 1] ? 0 : 1));
+      // Levenshtein distance <= 1 for tokens of length 2-6 against key targets
+      if (t.length >= 2 && t.length <= 6) {
+        const targets = ['max', 'maks', 'mack', 'mex'];
+        for (const target of targets) {
+          let prev = [];
+          for (let k = 0; k <= target.length; k++) prev[k] = k;
+          for (let i = 1; i <= t.length; i++) {
+            const cur = [i];
+            for (let j = 1; j <= target.length; j++) {
+              cur[j] = Math.min(cur[j - 1] + 1, prev[j] + 1, prev[j - 1] + (t[i - 1] === target[j - 1] ? 0 : 1));
+            }
+            prev = cur;
           }
-          prev = cur;
+          if (prev[target.length] <= 1) return true;
         }
-        if (prev[3] <= 1) return true;
       }
       return false;
     }
@@ -6457,7 +6463,7 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
       }
 
       // 2. Comprehensive Wake Pattern Matching (beginning, middle, or end of sentence)
-      const wakePattern = /\b(?:hey|hi|hello|ok|okay|yo|listen|wake\s+up)?\s*(max|maxy|maxie|maks|macks|mack|mac|maxx|mex|cozmo|cosmo|ozmo|osmo|robo|robot)\b/i;
+      const wakePattern = /\b(?:hey|hi|hello|ok|okay|yo|listen|wake\s+up|a|the)?\s*(max|maxy|maxie|maxi|maks|macks|mack|mac|maxx|mex|mark|marks|matt|matts|match|matches|mask|masks|mags|magz|make|makes|mike|mikes|mix|map|maps|next|nex|axe|cozmo|cosmo|ozmo|osmo|robo|robot)\b/i;
       const match = clean.match(wakePattern);
       if (match) {
         const matchStart = match.index;
@@ -6476,9 +6482,9 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
       const tokens = clean.split(' ');
       for (let i = 0; i < tokens.length; i++) {
         const token = tokens[i];
-        if (['hey', 'hi', 'hello', 'ok', 'okay', 'yo'].includes(token)) continue;
+        if (['hey', 'hi', 'hello', 'ok', 'okay', 'yo', 'a', 'the'].includes(token)) continue;
         if (this.isWakeToken(token)) {
-          const before = tokens.slice(0, i).filter(t => !['hey', 'hi', 'hello', 'ok', 'okay', 'yo'].includes(t)).join(' ').trim();
+          const before = tokens.slice(0, i).filter(t => !['hey', 'hi', 'hello', 'ok', 'okay', 'yo', 'a', 'the'].includes(t)).join(' ').trim();
           const after = tokens.slice(i + 1).join(' ').trim();
           const command = after || before || '';
           return { woken: true, command };
@@ -6611,7 +6617,7 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
       let bestInterimText = '';
       let detectedWakeFromAlt = null;
 
-      for (let i = e.resultIndex; i < e.results.length; i++) {
+      for (let i = 0; i < e.results.length; i++) {
         const res = e.results[i];
         if (!res) continue;
 
@@ -6622,8 +6628,8 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
           else bestInterimText += (bestInterimText ? ' ' : '') + tx;
         }
 
-        // Multi-alternative scan specifically for wake phrase in STANDBY_WAKE mode
-        if (this.mode === VoiceMode.STANDBY_WAKE && !detectedWakeFromAlt) {
+        // Multi-alternative scan specifically for wake phrase
+        if (!detectedWakeFromAlt) {
           for (let a = 0; a < Math.min(res.length, 3); a++) {
             const alt = res[a];
             if (alt && alt.transcript) {
@@ -6701,7 +6707,10 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
         // Check if the user just repeated the wake word in active mode:
         const parsed = this.parseWakeUtterance(spoken);
         if (parsed.woken && !parsed.command) {
-          setVoiceStatus('MAX LISTENING · I am listening, go ahead!', 2500);
+          playCozmoWakeChime();
+          setState('happy', 'Max acknowledged wake word');
+          showCaption('MAX LISTENING\nListening to you…', true);
+          setVoiceStatus('MAX LISTENING · I am listening, go ahead!', 3500);
           return;
         }
 
@@ -6736,8 +6745,13 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
             // Ignore trivial 1-letter noise
             if (query.length < 2) return;
 
-            // If it was just "max", ignore
-            if (/^(?:hey\s+)?max[.?!]?$/i.test(query)) {
+            // If it was just "max" / wake word alone without command, chime and remain listening
+            const parsedTimeout = this.parseWakeUtterance(query);
+            if (parsedTimeout.woken && !parsedTimeout.command) {
+              playCozmoWakeChime();
+              setState('happy', 'Max acknowledged wake word');
+              showCaption('MAX LISTENING\nListening to you…', true);
+              setVoiceStatus('MAX LISTENING · I am listening, go ahead!', 3500);
               return;
             }
 
