@@ -90,14 +90,36 @@ state — never leave the app broken between phases.
 - Exit criteria: no dead/duplicate UI code remains; full smoke test
   passes clean (no new console errors or `devLog(...'ERROR'...)` lines).
 
-## Phase 6 — (Deferred, not part of this engagement unless requested)
+## Phase 6 — Advanced Intelligence & Autonomous Behavior Engine
 
-Everything below is explicitly **out of scope** for the current UI
-redesign and should not be started without a new go-ahead:
+- **Multimodal Visual Reasoning & Scene Grounding**:
+  - Contextual awareness: seamlessly merge real-time camera visual analysis (lighting, proximity, recognized items, emotional facial expressions) with spoken dialogue.
+  - Smart vision follow-ups without requiring redundant user prompts (e.g., "What is this?" -> answers and tracks the object in scene memory).
+- **Proactive Robotic Personality & Cozmo Behavioral Model**:
+  - Max acts autonomously, not just as a passive Q&A assistant: expresses curiosity when seeing unfamiliar objects, yawns when idle, playfully reacts to sudden movements.
+  - Procedural robotic sound effects library (Web Audio synthesizer producing Cozmo-like giggles, curious coos, grumbles, surprised whistles, and purrs synchronized with eye animations).
+- **Autonomous Intent & Physical Action Planner (Modules 10 & 11)**:
+  - Generate structured physical motor reactions (`RobotCommand`: head tilts, happy spins, curious nudges, celebratory dances) paired with spoken dialogue and emotion states.
+  - Spatial gaze tracking: align virtual and physical orientation toward the active human speaker.
+- **Exit criteria**: Max proactively exhibits behavioral agency, conversational reasoning, and personality-driven autonomous reactions verified in Dev diagnostics and live interaction.
 
-- Migration to Next.js/TypeScript/React/Tailwind.
-- Wiring the ESP32 WebSocket connection to real hardware and physical
-  motor reactions.
-- Continuous (always-on) vision perception.
-- Planning/autonomy (item 11 in `PRD.md`).
-- Any new paid API integration beyond Gemini + ElevenLabs already in use.
+## Phase 7 — Long-Term Memory, Episodic Recall & Identity System
+
+- **Hierarchical Multi-Person Memory Architecture (Modules 7 & 7.5)**:
+  - **Working Context (Short-Term)**: Immediate topic memory, active conversational thread, and recent visual snapshots.
+  - **Semantic Memory (Long-Term Facts)**: User preferences, birthdays, habits, relationships, and personal facts stored in a structured, schema-versioned multi-person registry (`robo_aios_memory_v2`).
+  - **Episodic Memory (Life Events & Shared History)**: Chronological diary of past interactions, conversations, and experiences ("Remember when we tested the camera yesterday?").
+- **Biometric Face-to-Identity Binding**:
+  - Link client-side 128D facial descriptors directly to individual memory profiles.
+  - Instant zero-prompt profile recall: as soon as a recognized face enters camera view, Max greets them by name and restores their personalized context and memories.
+- **Autonomous Memory Extraction & Evolution**:
+  - LLM background extraction: automatically detect and store meaningful facts, preferences, and commitments from natural conversation without requiring manual "remember that..." commands.
+  - Conversational recall & proactive check-ins ("How did your exam go? You mentioned it yesterday!").
+  - Privacy and memory control: voice commands to inspect, edit, or delete memories ("What do you know about me?", "Forget my birthday").
+- **Exit criteria**: Multi-person profiles automatically persist, update from conversations, and trigger personalized greetings and episodic memory retrieval across sessions.
+
+## Phase 8 — Hardware Closed-Loop Embodiment & Real Chassis (Future)
+
+- Connect ESP32 WebSocket bridge to physical motors, track treads, head tilt servo, and lift arm.
+- Closed-loop telemetry: cliff/edge drop sensors (table safety), wheel odometry encoders, battery voltage ADC, and stall detection.
+- Fail-safe watchdog enforcement: hardware stops motors if communication drops for >750ms.
