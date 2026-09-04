@@ -6456,7 +6456,7 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
       return false;
     }
 
-    parseWakeUtterance(text) {
+    parseWakeUtterance(text, isStandby = false) {
       const raw = String(text || '').trim();
       const clean = this.normalize(raw);
       if (!clean) return { woken: false, command: '' };
@@ -6466,8 +6466,14 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
         return { woken: true, command: clean };
       }
 
-      // 2. Comprehensive Wake Pattern Matching (beginning, middle, or end of sentence)
-      const wakePattern = /\b(?:hey|hi|hello|ok|okay|yo|listen|wake\s+up|a|the)?\s*(max|maxy|maxie|maxi|maks|macks|mack|mac|maxx|mex|mark|marks|matt|matts|match|matches|mask|masks|mags|magz|make|makes|mike|mikes|mix|map|maps|next|nex|axe|cozmo|cosmo|ozmo|osmo|robo|robot)\b/i;
+      // 2. Comprehensive Wake Pattern Matching:
+      // In standby mode, include broader phonetic variations (mark, match, mask, make, next, etc.).
+      // In active conversation mode, use STRICT wake tokens so common English words (make, next, match, mark) aren't swallowed!
+      const standbyWakeTokens = 'max|maxy|maxie|maxi|maks|macks|mack|mac|maxx|mex|mark|marks|matt|matts|match|matches|mask|masks|mags|magz|make|makes|mike|mikes|mix|map|maps|next|nex|axe|cozmo|cosmo|ozmo|osmo|robo|robot';
+      const activeWakeTokens = 'max|maxy|maxie|maxi|maks|macks|mack|mac|maxx|mex|cozmo|cosmo|ozmo|osmo|robo|robot';
+      const patternSource = isStandby ? standbyWakeTokens : activeWakeTokens;
+      const wakePattern = new RegExp(`\\b(?:hey|hi|hello|ok|okay|yo|listen|wake\\s+up|a|the)?\\s*(${patternSource})\\b`, 'i');
+
       const match = clean.match(wakePattern);
       if (match) {
         const matchStart = match.index;
@@ -6482,16 +6488,18 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
         return { woken: true, command };
       }
 
-      // 3. Multi-token scan fallback
-      const tokens = clean.split(' ');
-      for (let i = 0; i < tokens.length; i++) {
-        const token = tokens[i];
-        if (['hey', 'hi', 'hello', 'ok', 'okay', 'yo', 'a', 'the'].includes(token)) continue;
-        if (this.isWakeToken(token)) {
-          const before = tokens.slice(0, i).filter(t => !['hey', 'hi', 'hello', 'ok', 'okay', 'yo', 'a', 'the'].includes(t)).join(' ').trim();
-          const after = tokens.slice(i + 1).join(' ').trim();
-          const command = after || before || '';
-          return { woken: true, command };
+      // 3. Multi-token scan fallback (only in standby mode to prevent false positives during continuous speech)
+      if (isStandby) {
+        const tokens = clean.split(' ');
+        for (let i = 0; i < tokens.length; i++) {
+          const token = tokens[i];
+          if (['hey', 'hi', 'hello', 'ok', 'okay', 'yo', 'a', 'the'].includes(token)) continue;
+          if (this.isWakeToken(token)) {
+            const before = tokens.slice(0, i).filter(t => !['hey', 'hi', 'hello', 'ok', 'okay', 'yo', 'a', 'the'].includes(t)).join(' ').trim();
+            const after = tokens.slice(i + 1).join(' ').trim();
+            const command = after || before || '';
+            return { woken: true, command };
+          }
         }
       }
 
@@ -6616,12 +6624,13 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
         return;
       }
 
-      // Check all alternatives across current results to maximize wake & speech accuracy
+      // Accumulate only current frame results from e.resultIndex
       let bestFinalText = '';
       let bestInterimText = '';
       let detectedWakeFromAlt = null;
+      const isStandby = (this.mode === VoiceMode.STANDBY_WAKE);
 
-      for (let i = 0; i < e.results.length; i++) {
+      for (let i = e.resultIndex; i < e.results.length; i++) {
         const res = e.results[i];
         if (!res) continue;
 
@@ -6633,11 +6642,11 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
         }
 
         // Multi-alternative scan specifically for wake phrase
-        if (!detectedWakeFromAlt) {
+        if (isStandby && !detectedWakeFromAlt) {
           for (let a = 0; a < Math.min(res.length, 3); a++) {
             const alt = res[a];
             if (alt && alt.transcript) {
-              const parsed = this.parseWakeUtterance(alt.transcript);
+              const parsed = this.parseWakeUtterance(alt.transcript, true);
               if (parsed.woken) {
                 detectedWakeFromAlt = { spoken: alt.transcript, parsed };
                 break;
@@ -6654,7 +6663,7 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
       // MODE 1: STANDBY WAKE
       if (this.mode === VoiceMode.STANDBY_WAKE) {
         const candidateSpoken = detectedWakeFromAlt ? detectedWakeFromAlt.spoken : spoken;
-        const parsed = detectedWakeFromAlt ? detectedWakeFromAlt.parsed : this.parseWakeUtterance(candidateSpoken);
+        const parsed = detectedWakeFromAlt ? detectedWakeFromAlt.parsed : this.parseWakeUtterance(candidateSpoken, true);
         if (!parsed.woken) return;
 
         this.wakeCount++;
@@ -6671,6 +6680,7 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
           }
           this.utteranceCount++;
           playCozmoWakeChime();
+          this.stopSession('dispatched direct command');
           this.setMode(VoiceMode.THINKING);
           setState('listening', 'Max heard: ' + parsed.command);
           showCaption('MAX HEARS\n' + parsed.command, true);
@@ -6700,6 +6710,7 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
         if (CONVERSATION_STOP_RE.test(spoken.trim())) {
           this.transcriptBuffer = '';
           log('VOICE · user ended conversation with stop command · ' + spoken);
+          this.stopSession('conversation exit');
           this.setMode(VoiceMode.STANDBY_WAKE);
           cozmoSoundEngine?.playChirp(0.9);
           setState('curious', 'standing by');
@@ -6708,8 +6719,8 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
           return;
         }
 
-        // Check if the user just repeated the wake word in active mode:
-        const parsed = this.parseWakeUtterance(spoken);
+        // Check if the user just repeated the wake word in active mode (strict check):
+        const parsed = this.parseWakeUtterance(spoken, false);
         if (parsed.woken && !parsed.command) {
           playCozmoWakeChime();
           setState('happy', 'Max acknowledged wake word');
@@ -6750,7 +6761,7 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
             if (query.length < 2) return;
 
             // If it was just "max" / wake word alone without command, chime and remain listening
-            const parsedTimeout = this.parseWakeUtterance(query);
+            const parsedTimeout = this.parseWakeUtterance(query, false);
             if (parsedTimeout.woken && !parsedTimeout.command) {
               playCozmoWakeChime();
               setState('happy', 'Max acknowledged wake word');
@@ -6766,6 +6777,7 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
 
             this.utteranceCount++;
             log('VOICE · sentence complete · dispatching: ' + query);
+            this.stopSession('dispatched query');
             this.setMode(VoiceMode.THINKING);
             setState('thinking', 'thinking · processing your words');
             respond(query).catch(err => log('RESPOND ERROR · ' + (err?.message || err)));
@@ -6822,12 +6834,36 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
       }, Math.max(10, delay));
     }
 
+    stopSession(reason = 'session reset') {
+      this.starting = false;
+      this.running = false;
+      clearTimeout(this.restartTimer);
+      clearTimeout(this.silenceTimer);
+      if (this.recognition) {
+        try {
+          const r = this.recognition;
+          this.recognition = null;
+          r.onstart = null;
+          r.onaudiostart = null;
+          r.onspeechstart = null;
+          r.onresult = null;
+          r.onerror = null;
+          r.onend = null;
+          r.abort();
+        } catch (_) {}
+      }
+    }
+
     setMode(newMode) {
       this.mode = newMode;
       log('VOICE · mode changed to ' + newMode);
       clearTimeout(this.silenceTimer);
       clearTimeout(this.conversationTimeoutTimer);
       clearTimeout(this.thinkingTimeoutTimer);
+
+      if (newMode === VoiceMode.THINKING || newMode === VoiceMode.SPEAKING) {
+        this.stopSession('mode:' + newMode);
+      }
 
       if (newMode === VoiceMode.THINKING) {
         // Watchdog: prevent getting permanently stuck in THINKING
@@ -6856,6 +6892,10 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
         }, this.CONVERSATION_WINDOW_MS);
       }
 
+      if (newMode === VoiceMode.STANDBY_WAKE && this.armed && !this.running && !this.starting && !talking && !aiRequestInFlight) {
+        this.scheduleRestart(30);
+      }
+
       this.syncUI();
     }
 
@@ -6871,9 +6911,8 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
       setState('listening', 'Max listening · continuous dialogue…');
       showCaption('MAX LISTENING\nSpeak naturally — Max is listening…', true);
 
-      if (!this.running && !this.starting) {
-        this.start();
-      }
+      // Schedule fresh recognition session with clean buffers
+      this.scheduleRestart(25);
     }
 
     triggerManualListening() {
@@ -6884,22 +6923,13 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
       setState('listening', 'Max listening · capturing speech');
       setVoiceStatus('MIC ACTIVE · speak now…');
       showCaption('MAX LISTENING\nSpeak now…', true);
-      if (!this.running && !this.starting) {
-        this.start();
-      }
+      this.scheduleRestart(15);
     }
 
     stop(reason = 'stopped') {
       log('VOICE · stop · ' + reason);
-      this.starting = false;
-      this.running = false;
-      clearTimeout(this.restartTimer);
-      clearTimeout(this.silenceTimer);
+      this.stopSession(reason);
       clearTimeout(this.conversationTimeoutTimer);
-      if (this.recognition) {
-        try { this.recognition.abort(); } catch (_) {}
-        this.recognition = null;
-      }
       this.setMode(VoiceMode.STANDBY_WAKE);
     }
 
@@ -9116,48 +9146,115 @@ $("#clearLogs")?.addEventListener("click",()=>{
   devLogLines=["[CLEARED] Log cleared by user."];
   devLogs.textContent=devLogLines[0];
 });
-$("#copyLogs")?.addEventListener("click",async()=>{
-  const payload=[
-    "ROBO AIOS v2.94 FACE OVERLAY FIX · v2.81 PERCEPTION BASELINE",
-    "Time: "+new Date().toISOString(),
-    "URL: "+location.href,
-    "User Agent: "+navigator.userAgent,
-    "Stage: "+devStage.textContent,
-    "Camera: "+devCamera.textContent,
-    "Mic API: "+devMic.textContent,
-    "Mic permission: "+devMicPermission.textContent,
-    "STT: "+devStt.textContent,
-    "On-device STT: "+devLocalStt.textContent,
-    "AI brain: "+devAI.textContent,
-    "Social presence: "+devSocialPresence.textContent,
-    "People detected: "+devSocialCount.textContent,
-    "Social interaction: "+devSocialInteraction.textContent,
-    "Social confidence: "+devSocialConfidence.textContent,
-    "Social change: "+devSocialChange.textContent,
-    "Fusion state: "+devFusionState.textContent,
-    "Fusion target: "+devFusionTarget.textContent,
-    "Fusion identity: "+devFusionIdentity.textContent,
-    "Fusion identity confidence: "+devFusionIdentityConfidence.textContent,
-    "Fusion position: "+devFusionPosition.textContent,
-    "Fusion movement: "+devFusionMovement.textContent,
-    "Fusion confidence: "+devFusionConfidence.textContent,
-    "Memory status: "+devMemoryStatus.textContent,
-    "Memory identity: "+devMemoryIdentity.textContent,
-    "Persistent memories: "+devMemoryCount.textContent,
-    "Profile facts: "+devMemoryFacts.textContent,
-    "Last memory change: "+devMemoryChange.textContent,
+$("#copyLogs")?.addEventListener("click", async () => {
+  const btn = document.getElementById("copyLogs");
+  const origText = btn ? btn.textContent : "COPY LOGS";
+  const getText = (elOrId) => {
+    try {
+      const el = typeof elOrId === "string" ? document.getElementById(elOrId) || document.querySelector(elOrId) : elOrId;
+      return el ? String(el.textContent || el.innerText || "").trim() : "N/A";
+    } catch (_) {
+      return "N/A";
+    }
+  };
+
+  const payload = [
+    "MAX AIOS v2.95 · SYSTEM & VOICE DIAGNOSTICS",
+    "Time: " + new Date().toISOString(),
+    "URL: " + location.href,
+    "User Agent: " + navigator.userAgent,
+    "Voice Mode: " + (window.voicePipeline ? window.voicePipeline.mode : getText("devWake")),
+    "Stage: " + getText(devStage),
+    "Camera API: " + (navigator.mediaDevices?.getUserMedia ? "AVAILABLE" : "UNAVAILABLE"),
+    "Mic API: " + getText(devMic),
+    "Mic permission: " + getText(devMicPermission),
+    "STT: " + getText(devStt),
+    "On-device STT: " + getText(devLocalStt),
+    "AI brain: " + getText(devAI),
+    "Wake Matches: " + getText("devWakeCount"),
+    "Barge-In Interrupts: " + getText("devBargeInCount"),
+    "Social presence: " + getText(typeof devSocialPresence !== "undefined" ? devSocialPresence : "devSocialPresence"),
+    "People detected: " + getText(typeof devSocialCount !== "undefined" ? devSocialCount : "devSocialCount"),
+    "Social interaction: " + getText(typeof devSocialInteraction !== "undefined" ? devSocialInteraction : "devSocialInteraction"),
+    "Social confidence: " + getText(typeof devSocialConfidence !== "undefined" ? devSocialConfidence : "devSocialConfidence"),
+    "Social change: " + getText(typeof devSocialChange !== "undefined" ? devSocialChange : "devSocialChange"),
+    "Fusion state: " + getText(typeof devFusionState !== "undefined" ? devFusionState : "devFusionState"),
+    "Fusion target: " + getText(typeof devFusionTarget !== "undefined" ? devFusionTarget : "devFusionTarget"),
+    "Fusion identity: " + getText(typeof devFusionIdentity !== "undefined" ? devFusionIdentity : "devFusionIdentity"),
+    "Fusion identity confidence: " + getText(typeof devFusionIdentityConfidence !== "undefined" ? devFusionIdentityConfidence : "devFusionIdentityConfidence"),
+    "Fusion position: " + getText(typeof devFusionPosition !== "undefined" ? devFusionPosition : "devFusionPosition"),
+    "Fusion movement: " + getText(typeof devFusionMovement !== "undefined" ? devFusionMovement : "devFusionMovement"),
+    "Fusion confidence: " + getText(typeof devFusionConfidence !== "undefined" ? devFusionConfidence : "devFusionConfidence"),
+    "Memory status: " + getText(typeof devMemoryStatus !== "undefined" ? devMemoryStatus : "devMemoryStatus"),
+    "Memory identity: " + getText(typeof devMemoryIdentity !== "undefined" ? devMemoryIdentity : "devMemoryIdentity"),
+    "Persistent memories: " + getText(typeof devMemoryCount !== "undefined" ? devMemoryCount : "devMemoryCount"),
+    "Profile facts: " + getText(typeof devMemoryFacts !== "undefined" ? devMemoryFacts : "devMemoryFacts"),
+    "Last memory change: " + getText(typeof devMemoryChange !== "undefined" ? devMemoryChange : "devMemoryChange"),
     "",
     "TRANSCRIPT:",
-    devTranscript.textContent,
+    getText(typeof devTranscript !== "undefined" ? devTranscript : "devTranscript"),
     "",
     "LOG:",
-    devLogLines.join("\n")
+    (Array.isArray(devLogLines) ? devLogLines.join("\n") : getText("devLogs"))
   ].join("\n");
-  try{
-    await navigator.clipboard.writeText(payload);
-    devLog("UI","Diagnostics copied to clipboard");
-  }catch(e){
-    devLog("ERROR","Clipboard copy failed",{name:e?.name,message:e?.message});
+
+  let copied = false;
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(payload);
+      copied = true;
+    }
+  } catch (err) {
+    // Clipboard API may fail if document is not focused or non-HTTPS/mobile
+  }
+
+  if (!copied) {
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = payload;
+      ta.style.position = "fixed";
+      ta.style.top = "0";
+      ta.style.left = "0";
+      ta.style.width = "2em";
+      ta.style.height = "2em";
+      ta.style.padding = "0";
+      ta.style.border = "none";
+      ta.style.outline = "none";
+      ta.style.boxShadow = "none";
+      ta.style.background = "transparent";
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      ta.setSelectionRange(0, 999999);
+      copied = document.execCommand("copy");
+      document.body.removeChild(ta);
+    } catch (fallbackErr) {
+      devLog("ERROR", "Clipboard copy fallback failed", { message: fallbackErr?.message });
+    }
+  }
+
+  if (copied) {
+    devLog("UI", "Diagnostics copied to clipboard (" + payload.length + " bytes)");
+    if (btn) {
+      btn.textContent = "COPIED!";
+      btn.style.color = "#7ee59a";
+      btn.style.borderColor = "rgba(126,229,154,0.6)";
+      setTimeout(() => {
+        btn.textContent = origText;
+        btn.style.color = "";
+        btn.style.borderColor = "";
+      }, 2000);
+    }
+  } else {
+    devLog("ERROR", "All clipboard copy methods failed");
+    if (btn) {
+      btn.textContent = "FAILED";
+      btn.style.color = "#ff6b6b";
+      setTimeout(() => {
+        btn.textContent = origText;
+        btn.style.color = "";
+      }, 2000);
+    }
   }
 });
 
