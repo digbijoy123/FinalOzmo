@@ -1052,6 +1052,7 @@ button{font:inherit}
   let pendingVoiceFaceEnrollment = null;
   let faceLastRecognitionAt = 0;
   let faceRecognitionInFlight = false;
+  let lastFaceRecognitionStartAt = 0;
   let faceRecognitionMatchDiagnostics = null;
   let lastKnownPersonId = null;
   let lastKnownPersonAt = 0;
@@ -1122,8 +1123,8 @@ button{font:inherit}
   const ACTIVE_IDENTITY_REFRESH_MS = 850;
   let lastLiveIdentitySyncAt = 0;
   let liveIdentityGeneration = 0;
-  const FACE_RECOGNITION_INPUT_SIZE = 320;
-  const FACE_RECOGNITION_SCORE_THRESHOLD = 0.38;
+  const FACE_RECOGNITION_INPUT_SIZE = 224;
+  const FACE_RECOGNITION_SCORE_THRESHOLD = 0.20;
 
   function faceDiag(){
     try{
@@ -1189,7 +1190,7 @@ button{font:inherit}
 
   function hasValidFaceLandmarks(detection){
     if(!detection) return false;
-    if(detection.score && detection.score < 0.35) return false;
+    if(detection.score && detection.score < 0.15) return false;
     if(!detection.landmarks) return true;
     const positions = detection.landmarks.positions;
     if(!positions || positions.length < 68) return false;
@@ -1206,7 +1207,8 @@ button{font:inherit}
 
     const noseTip = nose[3] || nose[0];
     const mouthCenter = mouth.reduce((acc, p) => ({ x: acc.x + p.x/mouth.length, y: acc.y + p.y/mouth.length }), {x:0, y:0});
-    if(noseTip.y < leftEyeCenter.y - 4 || noseTip.y > mouthCenter.y + 4) return false;
+    const tiltTolerance = Math.max(18, eyeDist * 0.25);
+    if(noseTip.y < leftEyeCenter.y - tiltTolerance || noseTip.y > mouthCenter.y + tiltTolerance) return false;
 
     return true;
   }
@@ -2284,17 +2286,21 @@ button{font:inherit}
     }
 
     faceRecognitionInFlight=true;
+    lastFaceRecognitionStartAt=Date.now();
     try{
-      const detections=await faceapi
-        .detectAllFaces(
-          camera,
-          new faceapi.TinyFaceDetectorOptions({
-            inputSize:FACE_RECOGNITION_INPUT_SIZE,
-            scoreThreshold:FACE_RECOGNITION_SCORE_THRESHOLD
-          })
-        )
-        .withFaceLandmarks(true)
-        .withFaceDescriptors();
+      const detections=await Promise.race([
+        faceapi
+          .detectAllFaces(
+            camera,
+            new faceapi.TinyFaceDetectorOptions({
+              inputSize:FACE_RECOGNITION_INPUT_SIZE,
+              scoreThreshold:FACE_RECOGNITION_SCORE_THRESHOLD
+            })
+          )
+          .withFaceLandmarks(true)
+          .withFaceDescriptors(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('face recognition timeout after 4000ms')), 4000))
+      ]);
 
       const liveFaces=Array.isArray(faceDetections)?faceDetections:[];
       const matchedPeople=[];
@@ -3257,6 +3263,11 @@ button{font:inherit}
               primary.box,
               FACE_SMOOTH_ALPHA
             );
+        }
+
+        if(faceRecognitionInFlight && (Date.now() - lastFaceRecognitionStartAt > 4500)){
+          devLog('FACE WARN', 'Force-clearing hung faceRecognitionInFlight flag');
+          faceRecognitionInFlight = false;
         }
 
         if(faceRecognitionAvailable && getStoredFaceProfiles().length && !faceRecognitionInFlight){
