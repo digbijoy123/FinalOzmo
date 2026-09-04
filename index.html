@@ -234,8 +234,8 @@ button{font:inherit}
 .devRow{display:flex;justify-content:space-between;border-bottom:1px solid rgba(255,255,255,.05);padding:7px 0;font-size:8px}
 .devRow b{font-weight:500;color:#9fe8b0}.devLogCard{grid-column:1/-1}
 .devActions{display:flex;gap:8px;margin-bottom:9px;flex-wrap:wrap}.devPre{margin:0;white-space:pre-wrap;word-break:break-word;font:8px/1.55 'JetBrains Mono';color:#d7dbea;max-height:280px;overflow:auto}
-.devLevel{display:flex;gap:9px;align-items:center;margin-top:11px;font-size:7px;color:#8f98aa}.devTrack{height:7px;flex:1;background:#0d1017;border-radius:8px;overflow:hidden}.devTrack i{display:block;width:0;height:100%;background:#69d8cf;border-radius:8px}
-.devChecks{display:grid;gap:6px}.devCheck{display:flex;justify-content:space-between;background:#10131d;padding:7px 8px;border-radius:7px;font-size:8px}.devCheck.ok b{color:#7ee59a}.devCheck.fail b{color:#ff7777}
+.devLevel{display:flex;gap:9px;align-items:center;margin-top:11px;font-size:7.5px;color:#8f98aa}.devTrack{height:9px;flex:1;background:#090d15;border:1px solid rgba(255,255,255,.08);border-radius:8px;overflow:hidden}.devTrack i{display:block;width:0%;height:100%;background:linear-gradient(90deg,#55c58c,#f0b45b,#ff7654);border-radius:8px;transition:width .08s ease}
+.devChecks{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:6px}.devCheck{display:flex;justify-content:space-between;background:#10131d;border:1px solid rgba(255,255,255,.05);padding:7px 8px;border-radius:7px;font-size:8px}.devCheck.ok b{color:#7ee59a}.devCheck.fail b{color:#ff7777}.devCheck.warn b{color:#f0b45b}
 
 /* Emotion Test Grid inside Dev Screen */
 .devEmotionCard{grid-column:1/-1}
@@ -469,22 +469,38 @@ button{font:inherit}
               </div>
             </section>
 
-            <section class="devCard">
-              <div class="devTitle">VOICE PIPELINE</div>
-              <div class="devRow"><span>Browser</span><b id="devBrowser">—</b></div>
-              <div class="devRow"><span>Camera</span><b id="devCamera">—</b></div>
-              <div class="devRow"><span>Microphone</span><b id="devMic">—</b></div>
-              <div class="devRow"><span>Speech recognition</span><b id="devStt">—</b></div>
-              <div class="devRow"><span>Mic permission</span><b id="devMicPermission">—</b></div>
-              <div class="devRow"><span>On-device STT</span><b id="devLocalStt">—</b></div>
-              <div class="devRow"><span>Wake engine</span><b id="devWake">OFF</b></div>
-              <div class="devRow"><span>AI brain</span><b id="devAI">—</b></div>
-              <div class="devRow"><span>Current stage</span><b id="devStage">IDLE</b></div>
-              <div class="devLevel"><span>MIC LEVEL</span><div class="devTrack"><i id="devLevel"></i></div></div>
+            <!-- PRODUCTION VOICE PIPELINE & STT DIAGNOSTICS CARD -->
+            <section class="devCard" id="devVoiceCard">
+              <div class="devHeaderRow" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:11px;">
+                <div class="devTitle" style="margin-bottom:0;">VOICE PIPELINE & STT ENGINE</div>
+                <div class="devActions" style="margin-bottom:0;display:flex;gap:5px;">
+                  <button class="devAction" id="testWakeChimeBtn" title="Play 180ms Cozmo Wake Chirp">CHIRP</button>
+                  <button class="devAction" id="testMicLevelBtn" title="Run 5-sec live Web Audio mic VU test">TEST MIC</button>
+                  <button class="devAction" id="resetVoiceBtn" title="Re-arm & restart speech pipeline">RESET</button>
+                </div>
+              </div>
+              <div class="devRow"><span>Engine Mode</span><b id="devWake" style="color:var(--cyan);font-weight:700;">STANDBY_WAKE</b></div>
+              <div class="devRow"><span>Current Stage</span><b id="devStage" style="color:#7ee59a;">IDLE</b></div>
+              <div class="devRow"><span>Speech Recognition API</span><b id="devStt">—</b></div>
+              <div class="devRow"><span>Microphone Hardware</span><b id="devMic">—</b></div>
+              <div class="devRow"><span>Mic Permission</span><b id="devMicPermission">—</b></div>
+              <div class="devRow"><span>On-Device STT Acceleration</span><b id="devLocalStt">—</b></div>
+              <div class="devRow"><span>AI Brain Connection</span><b id="devAI">—</b></div>
+              <div class="devRow"><span>Wake Word Matches</span><b id="devWakeCount">0</b></div>
+              <div class="devRow"><span>Voice Barge-In Interrupts</span><b id="devBargeInCount">0</b></div>
+              <div class="devRow"><span>VAD Silence Debounce</span><b id="devVadStatus">STANDBY (850–1600ms)</b></div>
+              <div class="devLevel" style="margin-top:10px;">
+                <span>MIC LEVEL</span>
+                <div class="devTrack"><i id="devLevel"></i></div>
+                <span id="devLevelText" style="font:700 8.5px monospace;color:var(--cyan);min-width:32px;text-align:right;">0%</span>
+              </div>
             </section>
             <section class="devCard">
-              <div class="devTitle">CAPTURED TRANSCRIPT</div>
-              <pre class="devPre" id="devTranscript">No transcript yet.</pre>
+              <div class="devHeaderRow" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:11px;">
+                <div class="devTitle" style="margin-bottom:0;">CAPTURED TRANSCRIPT</div>
+                <button class="devAction" id="clearTranscriptBtn" style="padding:4px 8px;font-size:7px;">CLEAR</button>
+              </div>
+              <pre class="devPre" id="devTranscript">No transcript yet. Say “Max” or tap mic.</pre>
             </section>
             <section class="devCard devLogCard">
               <div class="devTitle">EVENT / ERROR LOG</div>
@@ -519,8 +535,11 @@ button{font:inherit}
               <div class="devRow"><span>Movement</span><b id="devFusionMovement">STATIONARY</b></div>
               <div class="devRow"><span>Fusion confidence</span><b id="devFusionConfidence">0%</b></div>
             </section>
-            <section class="devCard">
-              <div class="devTitle">SYSTEM CHECK</div>
+            <section class="devCard" style="grid-column:1/-1;">
+              <div class="devHeaderRow" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:11px;">
+                <div class="devTitle" style="margin-bottom:0;">SYSTEM SUBSYSTEMS INTEGRITY CHECK</div>
+                <button class="devAction" id="rerunDevChecksBtn" style="border-color:var(--cyan);color:var(--cyan);">RE-RUN ALL CHECKS</button>
+              </div>
               <div class="devChecks" id="devChecks"></div>
             </section>
           </div>
@@ -5010,7 +5029,6 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
   const CONVERSATION_STOP_RE = /\b(?:stop|exit|quit|cancel|bye|goodbye|see you|sleep|go to sleep|shut up|quiet|silence|that's all|that is all|that's it|thats all|thank you|thanks|bas|alvida|done|khatam)\b/i;
 
   let conversationActive = false;
-  let conversationSilenceWatchdog = null;
 
   class UnifiedVoiceEngine {
     constructor() {
@@ -5029,6 +5047,14 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
       this.CONVERSATION_WINDOW_MS = 10000;
       this.lastErrorCode = '';
       this.transcriptBuffer = '';
+      this.wakeCount = 0;
+      this.bargeInCount = 0;
+      this.utteranceCount = 0;
+      this.currentVadDelay = 950;
+    }
+
+    isInActiveConversation() {
+      return this.mode === VoiceMode.ACTIVE_CONVERSATION || this.mode === VoiceMode.ACTIVE_LISTENING;
     }
 
     normalize(text) {
@@ -5203,6 +5229,9 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
         }
         bargeInText = bargeInText.trim();
         if (bargeInText.length >= 1) {
+          this.bargeInCount++;
+          const bCountEl = document.getElementById('devBargeInCount');
+          if (bCountEl) bCountEl.textContent = this.bargeInCount;
           if (typeof stopSpeakingAndListen === 'function') {
             stopSpeakingAndListen('voice-barge-in: ' + bargeInText);
           }
@@ -5237,6 +5266,10 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
         const parsed = this.parseWakeUtterance(spoken);
         if (!parsed.woken) return;
 
+        this.wakeCount++;
+        const wCountEl = document.getElementById('devWakeCount');
+        if (wCountEl) wCountEl.textContent = this.wakeCount;
+
         log('VOICE · wake phrase detected', { spoken, command: parsed.command });
 
         if (parsed.command) {
@@ -5244,6 +5277,7 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
             geminiLiveClient.start();
             return;
           }
+          this.utteranceCount++;
           this.setMode(VoiceMode.THINKING);
           setState('listening', 'Max heard: ' + parsed.command);
           showCaption('MAX HEARS\n' + parsed.command, true);
@@ -5279,17 +5313,20 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
         // Buffer the ongoing spoken text
         this.transcriptBuffer = spoken;
 
-        // Smart VAD Debounce:
-        // On Android Chrome, finalText fires prematurely on individual words (e.g. "can", "what", "tell").
-        // Do NOT cut the user off immediately. Wait for natural silence before dispatching.
-        // Check if sentence ends in an incomplete conjunction, preposition, or article:
+        // Adaptive VAD Debounce:
+        // Complete questions or crisp statements debounce at 850ms for snappy responsiveness.
+        // Clauses ending with conjunctions wait 1600ms so user has time to finish their thought.
         const trimmed = spoken.trim().toLowerCase();
         const isIncompleteClause = /\b(and|or|but|because|with|that|to|about|in|at|if|then|is|are|the|a|an|of|for|as)\s*$/i.test(trimmed);
+        const isQuestion = /\?$/.test(spoken.trim()) || /^(?:what|who|where|when|why|how|can|could|tell|is|are|do|does)\b/i.test(trimmed);
+        const debounceMs = isIncompleteClause ? 1600 : (isQuestion && finalText ? 850 : (finalText ? 950 : 1350));
+        this.currentVadDelay = debounceMs;
 
-        // Generous VAD Debounce:
-        // If the user ended on an incomplete connector ("...about India and"), wait 1800ms!
-        // For general speech, wait a comfortable 1200ms of true silence before finalizing.
-        const debounceMs = isIncompleteClause ? 1800 : (finalText ? 1200 : 1600);
+        const vadEl = document.getElementById('devVadStatus');
+        if (vadEl) {
+          vadEl.textContent = 'DEBOUNCING (' + debounceMs + 'ms)';
+          vadEl.style.color = '#f0b45b';
+        }
 
         this.silenceTimer = setTimeout(() => {
           if ((this.mode === VoiceMode.ACTIVE_LISTENING || this.mode === VoiceMode.ACTIVE_CONVERSATION) && this.transcriptBuffer) {
@@ -5304,6 +5341,12 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
               return;
             }
 
+            if (vadEl) {
+              vadEl.textContent = 'DISPATCHED';
+              vadEl.style.color = '#7ee59a';
+            }
+
+            this.utteranceCount++;
             log('VOICE · sentence complete · dispatching: ' + query);
             this.setMode(VoiceMode.THINKING);
             setState('thinking', 'thinking · processing your words');
@@ -5387,6 +5430,7 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
             this.setMode(VoiceMode.STANDBY_WAKE);
             setState('curious', 'curious · standing by');
             setVoiceStatus('MAX READY · say “Max” to talk');
+            hideCaption(1200);
           }
         }, this.CONVERSATION_WINDOW_MS);
       }
@@ -5440,6 +5484,19 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
       listening = (this.mode === VoiceMode.ACTIVE_LISTENING || this.mode === VoiceMode.ACTIVE_CONVERSATION);
       if (devWake) {
         devWake.textContent = this.armed ? (this.running ? this.mode : 'STARTING') : 'OFF';
+        devWake.style.color = this.mode === VoiceMode.ACTIVE_LISTENING ? '#5fd4d0' : (this.mode === VoiceMode.ACTIVE_CONVERSATION ? '#7ee59a' : (this.mode === VoiceMode.THINKING ? '#f0b45b' : (this.mode === VoiceMode.SPEAKING ? '#ef7fae' : '#69d8cf')));
+      }
+      if (devStage) {
+        if (this.mode === VoiceMode.STANDBY_WAKE) devStage.textContent = this.running ? 'LISTENING FOR WAKE' : 'STANDBY';
+        else if (this.mode === VoiceMode.ACTIVE_LISTENING) devStage.textContent = 'CAPTURING SPEECH';
+        else if (this.mode === VoiceMode.ACTIVE_CONVERSATION) devStage.textContent = 'AWAITING FOLLOW-UP';
+        else if (this.mode === VoiceMode.THINKING) devStage.textContent = 'AI INFERENCE';
+        else if (this.mode === VoiceMode.SPEAKING) devStage.textContent = 'MAX SPEAKING';
+      }
+      const vadEl = document.getElementById('devVadStatus');
+      if (vadEl && this.mode === VoiceMode.STANDBY_WAKE) {
+        vadEl.textContent = 'STANDBY (850–1600ms)';
+        vadEl.style.color = '#8f98aa';
       }
       if (this.mode === VoiceMode.STANDBY_WAKE) {
         micBtn.classList.remove('listening');
@@ -5453,7 +5510,6 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
 
   // Backward-compatible global wrappers
   let wakeArmed = true;
-  let wakeRecognition = null;
   function armWakeEngine(reason = 'manual gesture') {
     wakeArmed = true;
     return voiceEngine.arm(reason);
@@ -6701,10 +6757,8 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
     try {
       // Check for explicit conversation conclusion commands
       const isStopCommand = CONVERSATION_STOP_RE.test(clean) && clean.split(' ').length <= 5;
-      const inActiveConv = Boolean(conversationActive || (typeof voiceEngine !== 'undefined' && voiceEngine && (voiceEngine.mode === VoiceMode.ACTIVE_CONVERSATION || voiceEngine.mode === VoiceMode.ACTIVE_LISTENING)));
+      const inActiveConv = typeof voiceEngine !== 'undefined' && voiceEngine && voiceEngine.isInActiveConversation();
       if(inActiveConv && isStopCommand){
-        conversationActive = false;
-        clearTimeout(conversationSilenceWatchdog);
         if(typeof voiceEngine !== 'undefined' && voiceEngine) voiceEngine.setMode(VoiceMode.STANDBY_WAKE);
         const signoffs = [
           "Got it! Standing by whenever you need me.",
@@ -6712,17 +6766,13 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
           "Understood! Going into standby.",
           "Anytime! I'm right here if you need me."
         ];
-      const signoff = signoffs[Math.floor(Math.random() * signoffs.length)];
-      setState('happy', 'conversation ended · standby');
-      showCaption('MAX\n' + signoff, true);
-      setVoiceStatus('MAX READY · say “Max” to talk');
-      speak(signoff, detectConversationLanguage(clean));
-      return;
-    }
-
-    // Activate/refresh continuous conversational topic mode
-    conversationActive = true;
-    clearTimeout(conversationSilenceWatchdog);
+        const signoff = signoffs[Math.floor(Math.random() * signoffs.length)];
+        setState('happy', 'conversation ended · standby');
+        showCaption('MAX\n' + signoff, true);
+        setVoiceStatus('MAX READY · say “Max” to talk');
+        speak(signoff, detectConversationLanguage(clean));
+        return;
+      }
 
     const memoryCommand=await handleMemoryCommand(clean);
     if(memoryCommand?.handled){
@@ -7052,8 +7102,6 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
         try{URL.revokeObjectURL(roboAudioUrl);}catch(_){}
         roboAudioUrl=null;
       }
-      setState('curious','curious · standing by');
-      hideCaption(1800);
     };
 
     audio.onerror=()=>{
@@ -7105,8 +7153,6 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
       talking=false;
       micBtn.classList.remove('talking');
       wakeAfterSpeechEnd();
-      setState('curious','curious · standing by');
-      hideCaption(1800);
     };
 
     u.onerror=(e)=>{
@@ -7467,6 +7513,107 @@ function runDevChecks(){
     localStorage.setItem('robo_live_voice', e.target.value);
     devLog('LIVE', 'Live voice persona set to: ' + e.target.value);
   });
+  // Live Web Audio VU-Meter Calibration Test (5 Seconds)
+  let micTestActive = false;
+  async function runMicLevelTest() {
+    if (micTestActive) return;
+    const btn = document.getElementById('testMicLevelBtn');
+    const levelBar = document.getElementById('devLevel');
+    const levelText = document.getElementById('devLevelText');
+
+    try {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        devLog('MIC ERROR', 'getUserMedia API unavailable in this environment');
+        return;
+      }
+      micTestActive = true;
+      if (btn) {
+        btn.textContent = 'TESTING…';
+        btn.classList.add('active');
+      }
+      devLog('MIC', 'Starting 5-second live Web Audio VU meter calibration…');
+
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+      });
+
+      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === 'suspended') await audioCtx.resume();
+
+      const analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 256;
+      const source = audioCtx.createMediaStreamSource(stream);
+      source.connect(analyser);
+
+      const data = new Uint8Array(analyser.fftSize);
+      let peak = 0;
+      const startTime = performance.now();
+
+      function update() {
+        if (!micTestActive) return;
+        analyser.getByteTimeDomainData(data);
+        let sum = 0;
+        for (let i = 0; i < data.length; i++) {
+          const n = (data[i] - 128) / 128;
+          sum += n * n;
+        }
+        const rms = Math.sqrt(sum / data.length);
+        const percent = Math.min(100, Math.round(rms * 450));
+        if (percent > peak) peak = percent;
+
+        if (levelBar) levelBar.style.width = percent + '%';
+        if (levelText) levelText.textContent = percent + '%';
+
+        if (performance.now() - startTime < 5000) {
+          requestAnimationFrame(update);
+        } else {
+          micTestActive = false;
+          stream.getTracks().forEach(t => t.stop());
+          audioCtx.close().catch(() => {});
+          if (btn) {
+            btn.textContent = 'TEST MIC';
+            btn.classList.remove('active');
+          }
+          if (levelBar) levelBar.style.width = '0%';
+          if (levelText) levelText.textContent = '0%';
+          devLog('MIC', 'Mic calibration complete · Peak voice energy: ' + peak + '% (Nominal: >20%)');
+        }
+      }
+      update();
+    } catch (err) {
+      micTestActive = false;
+      if (btn) {
+        btn.textContent = 'TEST MIC';
+        btn.classList.remove('active');
+      }
+      devLog('MIC ERROR', 'Mic test failed: ' + (err?.message || err));
+    }
+  }
+
+  // Voice Diagnostic Action Controls
+  $("#testWakeChimeBtn")?.addEventListener("click", () => {
+    playCozmoWakeChime();
+    devLog("VOICE", "Played Cozmo wake chime chirp");
+  });
+  $("#testMicLevelBtn")?.addEventListener("click", () => {
+    runMicLevelTest();
+  });
+  $("#resetVoiceBtn")?.addEventListener("click", () => {
+    voiceEngine.stop('user-reset');
+    voiceEngine.arm('user-reset');
+    voiceEngine.start();
+    devLog("VOICE", "Unified Voice Engine restarted");
+  });
+  $("#clearTranscriptBtn")?.addEventListener("click", () => {
+    if (devTranscript) devTranscript.textContent = "Transcript cleared. Say “Max” or tap mic.";
+    voiceEngine.transcriptBuffer = "";
+    devLog("VOICE", "Captured transcript cleared");
+  });
+  $("#rerunDevChecksBtn")?.addEventListener("click", () => {
+    runDevChecks();
+    devLog("CHECK", "All system checks re-evaluated by developer");
+  });
+
 $("#clearLogs")?.addEventListener("click",()=>{
   devLogLines=["[CLEARED] Log cleared by user."];
   devLogs.textContent=devLogLines[0];
