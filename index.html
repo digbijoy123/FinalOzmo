@@ -244,6 +244,15 @@ button{font:inherit}
 .stateBtn:hover{background:rgba(35,44,64,.95);border-color:rgba(0,229,255,.4);color:var(--cyan)}
 .stateBtn.active{background:rgba(0,229,255,.18);border-color:var(--cyan);color:var(--cyan);box-shadow:0 0 12px rgba(0,229,255,.3)}
 .stateBtn small{font-size:6.5px;opacity:.65;text-transform:none;text-align:center;line-height:1.1;font-weight:400}
+
+/* Cozmo Procedural Sound FX Card */
+.devSfxCard{grid-column:1/-1}
+.sfxSoundBoard{display:grid;grid-template-columns:repeat(auto-fill,minmax(95px,1fr));gap:6px;margin-top:8px}
+.sfxPlayBtn{min-height:34px;display:flex;align-items:center;justify-content:center;gap:4px;border:1px solid rgba(255,255,255,.09);background:rgba(20,26,38,.85);color:#e2e8f0;border-radius:8px;padding:6px 8px;font:700 8px/1.2 ui-monospace,monospace;letter-spacing:.04em;cursor:pointer;transition:all .15s ease;user-select:none;-webkit-user-select:none}
+.sfxPlayBtn:hover{background:rgba(30,41,59,.95);border-color:rgba(0,229,255,.5);color:var(--cyan);transform:translateY(-1px)}
+.sfxPlayBtn:active{transform:translateY(1px);background:rgba(0,229,255,.2)}
+.sfxPlayBtn.playing{border-color:var(--cyan);background:rgba(0,229,255,.18);color:var(--cyan);box-shadow:0 0 10px rgba(0,229,255,.3)}
+
 /* Robot Chassis & Safety Card */
 .devChassisCard{grid-column:1/-1}
 .chassisMetric{background:rgba(16,19,29,.85);border:1px solid rgba(255,255,255,.07);border-radius:10px;padding:10px}
@@ -370,6 +379,39 @@ button{font:inherit}
                 </div>
               </div>
               <div class="stateGrid" id="stateGrid"></div>
+            </section>
+
+            <!-- COZMO PROCEDURAL SOUND FX ENGINE (PHASE B) -->
+            <section class="devCard devSfxCard">
+              <div class="devHeaderRow" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
+                <div class="devTitle" style="margin-bottom:0;">COZMO PROCEDURAL SOUND FX ENGINE · PHASE B</div>
+                <div class="devActions" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:0;">
+                  <button class="devAction active" id="sfxToggleBtn">SOUND FX: ON</button>
+                  <label style="display:inline-flex;align-items:center;gap:5px;font-size:7.5px;color:#8f98aa;font-weight:700;margin-left:4px;">
+                    VOL:
+                    <input type="range" id="sfxVolumeSlider" min="0" max="100" value="70" style="width:65px;accent-color:var(--cyan);cursor:pointer;" />
+                    <span id="sfxVolumeVal" style="color:var(--cyan);font-family:monospace;width:24px;">70%</span>
+                  </label>
+                </div>
+              </div>
+              <div class="sfxSoundBoard">
+                <button class="sfxPlayBtn" data-sfx="wake" style="background:rgba(168,85,247,.18);border-color:rgba(168,85,247,.5);color:#d8b4fe;">🔔 WAKE CHIME</button>
+                <button class="sfxPlayBtn" data-sfx="curious">❓ CURIOUS</button>
+                <button class="sfxPlayBtn" data-sfx="happy">😊 HAPPY COO</button>
+                <button class="sfxPlayBtn" data-sfx="giggle">😄 GIGGLE</button>
+                <button class="sfxPlayBtn" data-sfx="excited">🎉 EXCITED</button>
+                <button class="sfxPlayBtn" data-sfx="surprised">😲 SURPRISED</button>
+                <button class="sfxPlayBtn" data-sfx="grumble">😤 GRUMBLE</button>
+                <button class="sfxPlayBtn" data-sfx="whine">🥺 WHINE</button>
+                <button class="sfxPlayBtn" data-sfx="yawn">🥱 YAWN SIGH</button>
+                <button class="sfxPlayBtn" data-sfx="purr">😻 PURR</button>
+                <button class="sfxPlayBtn" data-sfx="bargein">🛑 BARGE-IN</button>
+                <button class="sfxPlayBtn" data-sfx="chirp">🐤 CHIRP</button>
+              </div>
+              <div style="margin-top:8px;display:flex;justify-content:space-between;align-items:center;font-size:7.5px;color:#8f98aa;">
+                <span>Procedural Web Audio synthesis · Zero external files · <b id="sfxStatusLabel" style="color:#7ee59a;">READY</b></span>
+                <span id="sfxLastPlayed" style="font-family:monospace;color:#f0f4fc;">Last: none</span>
+              </div>
             </section>
 
             <!-- MODULES 12 & 13: ROBOT BODY & SAFETY WATCHDOG -->
@@ -4022,6 +4064,14 @@ button{font:inherit}
     document.querySelectorAll(".stateBtn").forEach(b =>
       b.classList.toggle("active", b.dataset.state === state)
     );
+
+    // Cozmo Procedural Sound Effects synchronization (Phase B)
+    if (previousState !== next && !meta.silent && typeof cozmoSoundEngine !== 'undefined') {
+      if (!meta.auto || Math.random() < 0.40) {
+        cozmoSoundEngine.playForEmotion(next);
+      }
+    }
+
     log(note || ("state → " + state));
   }
 
@@ -4513,35 +4563,508 @@ button{font:inherit}
     log('VOICE · '+text);
   }
 
-  function playCozmoWakeChime(){
-    try {
-      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+  /* =========================================================================
+   * MODULE 9: COZMO PROCEDURAL SOUND FX ENGINE (PHASE B)
+   * Real-time zero-asset Web Audio synthesis of authentic robot vocalizations
+   * ========================================================================= */
+
+  class CozmoSoundEngine {
+    constructor() {
+      this.ctx = null;
+      this.masterGain = null;
+      this.enabled = localStorage.getItem('robo_sfx_enabled') !== 'false';
+      this.volume = parseFloat(localStorage.getItem('robo_sfx_volume') || '0.70');
+      this.lastPlayedSound = 'none';
+      this.lastPlayedTime = 0;
+      this.activeNodes = new Set();
+    }
+
+    initContext() {
+      if (!this.ctx) {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return null;
+        try {
+          this.ctx = new AudioCtx();
+          this.masterGain = this.ctx.createGain();
+          this.masterGain.gain.setValueAtTime(this.volume, this.ctx.currentTime);
+          this.masterGain.connect(this.ctx.destination);
+        } catch (e) {
+          console.warn('CozmoSoundEngine audio context init failed:', e);
+          return null;
+        }
+      }
+      if (this.ctx && this.ctx.state === 'suspended') {
+        this.ctx.resume().catch(() => {});
+      }
+      return this.ctx;
+    }
+
+    setVolume(val) {
+      this.volume = Math.max(0, Math.min(1, Number(val) || 0));
+      localStorage.setItem('robo_sfx_volume', String(this.volume));
+      if (this.masterGain && this.ctx) {
+        this.masterGain.gain.setValueAtTime(this.volume, this.ctx.currentTime);
+      }
+    }
+
+    setEnabled(val) {
+      this.enabled = Boolean(val);
+      localStorage.setItem('robo_sfx_enabled', String(this.enabled));
+    }
+
+    registerNode(node) {
+      this.activeNodes.add(node);
+      node.onended = () => this.activeNodes.delete(node);
+    }
+
+    updateUI(soundName) {
+      this.lastPlayedSound = soundName;
+      this.lastPlayedTime = Date.now();
+      const el = document.getElementById('sfxLastPlayed');
+      if (el) el.textContent = `Last: ${soundName} (${new Date().toLocaleTimeString().split(' ')[0]})`;
+      const btn = document.querySelector(`.sfxPlayBtn[data-sfx="${soundName}"]`);
+      if (btn) {
+        btn.classList.add('playing');
+        setTimeout(() => btn.classList.remove('playing'), 450);
+      }
+    }
+
+    // 1. WAKE CHIME: Cheerful ascending 3-tone bell chirp (587Hz -> 880Hz -> 1174Hz)
+    playWakeChime() {
+      if (!this.enabled) return;
+      const ctx = this.initContext();
+      if (!ctx) return;
+      this.updateUI('wake');
       const now = ctx.currentTime;
-      // High-tone cute companion robot wake chirp
+
+      // Note 1: D5 (587.3Hz)
       const osc1 = ctx.createOscillator();
-      const gain1 = ctx.createGain();
+      const g1 = ctx.createGain();
       osc1.type = 'sine';
-      osc1.frequency.setValueAtTime(540, now);
-      osc1.frequency.exponentialRampToValueAtTime(820, now + 0.07);
-      gain1.gain.setValueAtTime(0.25, now);
-      gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
-      osc1.connect(gain1);
-      gain1.connect(ctx.destination);
+      osc1.frequency.setValueAtTime(587.3, now);
+      osc1.frequency.exponentialRampToValueAtTime(740, now + 0.07);
+      g1.gain.setValueAtTime(0.24, now);
+      g1.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+      osc1.connect(g1);
+      g1.connect(this.masterGain);
       osc1.start(now);
       osc1.stop(now + 0.08);
+      this.registerNode(osc1);
+
+      // Note 2: A5 (880Hz)
+      const osc2 = ctx.createOscillator();
+      const g2 = ctx.createGain();
+      osc2.type = 'triangle';
+      osc2.frequency.setValueAtTime(880, now + 0.08);
+      osc2.frequency.exponentialRampToValueAtTime(1020, now + 0.16);
+      g2.gain.setValueAtTime(0.28, now + 0.08);
+      g2.gain.exponentialRampToValueAtTime(0.001, now + 0.17);
+      osc2.connect(g2);
+      g2.connect(this.masterGain);
+      osc2.start(now + 0.08);
+      osc2.stop(now + 0.17);
+      this.registerNode(osc2);
+
+      // Note 3: D6 (1174.6Hz with sparkling resonant overtone)
+      const osc3 = ctx.createOscillator();
+      const g3 = ctx.createGain();
+      osc3.type = 'sine';
+      osc3.frequency.setValueAtTime(1174.6, now + 0.17);
+      osc3.frequency.exponentialRampToValueAtTime(1320, now + 0.32);
+      g3.gain.setValueAtTime(0.32, now + 0.17);
+      g3.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+      osc3.connect(g3);
+      g3.connect(this.masterGain);
+      osc3.start(now + 0.17);
+      osc3.stop(now + 0.35);
+      this.registerNode(osc3);
+    }
+
+    // 2. CHIRP: Upward lively chirp
+    playChirp(pitchMult = 1.0) {
+      if (!this.enabled) return;
+      const ctx = this.initContext();
+      if (!ctx) return;
+      this.updateUI('chirp');
+      const now = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(620 * pitchMult, now);
+      osc.frequency.exponentialRampToValueAtTime(1250 * pitchMult, now + 0.09);
+      gain.gain.setValueAtTime(0.26, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.10);
+      osc.connect(gain);
+      gain.connect(this.masterGain);
+      osc.start(now);
+      osc.stop(now + 0.10);
+      this.registerNode(osc);
+    }
+
+    // 3. HAPPY / COO: Warm, tender robotic coo
+    playCoo() {
+      if (!this.enabled) return;
+      const ctx = this.initContext();
+      if (!ctx) return;
+      this.updateUI('happy');
+      const now = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      const filter = ctx.createBiquadFilter();
+
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(1400, now);
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(420, now);
+      osc.frequency.exponentialRampToValueAtTime(620, now + 0.14);
+      osc.frequency.exponentialRampToValueAtTime(520, now + 0.28);
+
+      gain.gain.setValueAtTime(0.001, now);
+      gain.gain.exponentialRampToValueAtTime(0.30, now + 0.06);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.30);
+
+      osc.connect(filter);
+      filter.connect(gain);
+      gain.connect(this.masterGain);
+      osc.start(now);
+      osc.stop(now + 0.30);
+      this.registerNode(osc);
+    }
+
+    // 4. GIGGLE: Rapid bubbly staccato triplets
+    playGiggle() {
+      if (!this.enabled) return;
+      const ctx = this.initContext();
+      if (!ctx) return;
+      this.updateUI('giggle');
+      const now = ctx.currentTime;
+      const freqs = [840, 1080, 1340, 1120];
+      const durations = [0.045, 0.045, 0.055, 0.06];
+
+      let t = now;
+      freqs.forEach((f, i) => {
+        const osc = ctx.createOscillator();
+        const g = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(f, t);
+        osc.frequency.exponentialRampToValueAtTime(f * 1.12, t + durations[i]);
+        g.gain.setValueAtTime(0.25, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t + durations[i]);
+        osc.connect(g);
+        g.connect(this.masterGain);
+        osc.start(t);
+        osc.stop(t + durations[i]);
+        this.registerNode(osc);
+        t += durations[i] + 0.025;
+      });
+    }
+
+    // 5. CURIOUS: Signature questioning upward chirp ("Wheep?")
+    playCurious() {
+      if (!this.enabled) return;
+      const ctx = this.initContext();
+      if (!ctx) return;
+      this.updateUI('curious');
+      const now = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      const filter = ctx.createBiquadFilter();
+
+      filter.type = 'bandpass';
+      filter.frequency.setValueAtTime(950, now);
+      filter.Q.setValueAtTime(2.5, now);
+
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(360, now);
+      osc.frequency.exponentialRampToValueAtTime(760, now + 0.22);
+
+      gain.gain.setValueAtTime(0.001, now);
+      gain.gain.exponentialRampToValueAtTime(0.35, now + 0.05);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.24);
+
+      osc.connect(filter);
+      filter.connect(gain);
+      gain.connect(this.masterGain);
+      osc.start(now);
+      osc.stop(now + 0.24);
+      this.registerNode(osc);
+    }
+
+    // 6. EXCITED: Jubilant ascending arpeggio warble
+    playExcited() {
+      if (!this.enabled) return;
+      const ctx = this.initContext();
+      if (!ctx) return;
+      this.updateUI('excited');
+      const now = ctx.currentTime;
+      const freqs = [640, 840, 1140, 1480];
+      let t = now;
+      freqs.forEach((f, idx) => {
+        const osc = ctx.createOscillator();
+        const g = ctx.createGain();
+        osc.type = idx === 3 ? 'triangle' : 'sine';
+        osc.frequency.setValueAtTime(f, t);
+        osc.frequency.exponentialRampToValueAtTime(f * 1.15, t + 0.06);
+        g.gain.setValueAtTime(0.28, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 0.07);
+        osc.connect(g);
+        g.connect(this.masterGain);
+        osc.start(t);
+        osc.stop(t + 0.07);
+        this.registerNode(osc);
+        t += 0.045;
+      });
+    }
+
+    // 7. SURPRISED: Sharp high-tone perk whistle
+    playSurprised() {
+      if (!this.enabled) return;
+      const ctx = this.initContext();
+      if (!ctx) return;
+      this.updateUI('surprised');
+      const now = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(720, now);
+      osc.frequency.exponentialRampToValueAtTime(1750, now + 0.12);
+      osc.frequency.exponentialRampToValueAtTime(1600, now + 0.20);
+
+      gain.gain.setValueAtTime(0.32, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+
+      osc.connect(gain);
+      gain.connect(this.masterGain);
+      osc.start(now);
+      osc.stop(now + 0.22);
+      this.registerNode(osc);
+    }
+
+    // 8. GRUMBLE: Low comedic grumpy robot buzz
+    playGrumble() {
+      if (!this.enabled) return;
+      const ctx = this.initContext();
+      if (!ctx) return;
+      this.updateUI('grumble');
+      const now = ctx.currentTime;
+
+      const osc = ctx.createOscillator();
+      const lfo = ctx.createOscillator();
+      const lfoGain = ctx.createGain();
+      const gain = ctx.createGain();
+      const filter = ctx.createBiquadFilter();
+
+      lfo.type = 'sawtooth';
+      lfo.frequency.setValueAtTime(26, now);
+      lfoGain.gain.setValueAtTime(32, now);
+      lfo.connect(lfoGain);
+      lfoGain.connect(osc.frequency);
+
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(550, now);
+
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(165, now);
+      osc.frequency.exponentialRampToValueAtTime(110, now + 0.32);
+
+      gain.gain.setValueAtTime(0.24, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.34);
+
+      osc.connect(filter);
+      filter.connect(gain);
+      gain.connect(this.masterGain);
+
+      lfo.start(now);
+      osc.start(now);
+      lfo.stop(now + 0.34);
+      osc.stop(now + 0.34);
+      this.registerNode(osc);
+    }
+
+    // 9. WHINE: Melancholy sad downward whine
+    playWhine() {
+      if (!this.enabled) return;
+      const ctx = this.initContext();
+      if (!ctx) return;
+      this.updateUI('whine');
+      const now = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(480, now);
+      osc.frequency.exponentialRampToValueAtTime(260, now + 0.35);
+
+      gain.gain.setValueAtTime(0.001, now);
+      gain.gain.exponentialRampToValueAtTime(0.25, now + 0.05);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.38);
+
+      osc.connect(gain);
+      gain.connect(this.masterGain);
+      osc.start(now);
+      osc.stop(now + 0.38);
+      this.registerNode(osc);
+    }
+
+    // 10. YAWN: Gentle, drowsy robot sigh
+    playYawn() {
+      if (!this.enabled) return;
+      const ctx = this.initContext();
+      if (!ctx) return;
+      this.updateUI('yawn');
+      const now = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      const filter = ctx.createBiquadFilter();
+
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(750, now);
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(320, now);
+      osc.frequency.exponentialRampToValueAtTime(490, now + 0.18);
+      osc.frequency.exponentialRampToValueAtTime(190, now + 0.55);
+
+      gain.gain.setValueAtTime(0.001, now);
+      gain.gain.exponentialRampToValueAtTime(0.22, now + 0.12);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.58);
+
+      osc.connect(filter);
+      filter.connect(gain);
+      gain.connect(this.masterGain);
+      osc.start(now);
+      osc.stop(now + 0.58);
+      this.registerNode(osc);
+    }
+
+    // 11. PURR: Comforting rhythmic robot purr
+    playPurr() {
+      if (!this.enabled) return;
+      const ctx = this.initContext();
+      if (!ctx) return;
+      this.updateUI('purr');
+      const now = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const lfo = ctx.createOscillator();
+      const lfoGain = ctx.createGain();
+      const gain = ctx.createGain();
+      const filter = ctx.createBiquadFilter();
+
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(280, now);
+
+      lfo.type = 'sine';
+      lfo.frequency.setValueAtTime(16, now);
+      lfoGain.gain.setValueAtTime(0.12, now);
+      lfo.connect(lfoGain);
+      lfoGain.connect(gain.gain);
+
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(115, now);
+
+      gain.gain.setValueAtTime(0.16, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+
+      osc.connect(filter);
+      filter.connect(gain);
+      gain.connect(this.masterGain);
+
+      lfo.start(now);
+      osc.start(now);
+      lfo.stop(now + 0.45);
+      osc.stop(now + 0.45);
+      this.registerNode(osc);
+    }
+
+    // 12. BARGE-IN: Crisp double blip acknowledging speech interruption
+    playBargeIn() {
+      if (!this.enabled) return;
+      const ctx = this.initContext();
+      if (!ctx) return;
+      this.updateUI('bargein');
+      const now = ctx.currentTime;
+
+      const osc1 = ctx.createOscillator();
+      const g1 = ctx.createGain();
+      osc1.type = 'sine';
+      osc1.frequency.setValueAtTime(880, now);
+      g1.gain.setValueAtTime(0.22, now);
+      g1.gain.exponentialRampToValueAtTime(0.001, now + 0.04);
+      osc1.connect(g1);
+      g1.connect(this.masterGain);
+      osc1.start(now);
+      osc1.stop(now + 0.04);
+      this.registerNode(osc1);
 
       const osc2 = ctx.createOscillator();
-      const gain2 = ctx.createGain();
-      osc2.type = 'triangle';
-      osc2.frequency.setValueAtTime(820, now + 0.08);
-      osc2.frequency.exponentialRampToValueAtTime(1150, now + 0.16);
-      gain2.gain.setValueAtTime(0.28, now + 0.08);
-      gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
-      osc2.connect(gain2);
-      gain2.connect(ctx.destination);
-      osc2.start(now + 0.08);
-      osc2.stop(now + 0.18);
-    } catch (_) {}
+      const g2 = ctx.createGain();
+      osc2.type = 'sine';
+      osc2.frequency.setValueAtTime(1150, now + 0.05);
+      g2.gain.setValueAtTime(0.24, now + 0.05);
+      g2.gain.exponentialRampToValueAtTime(0.001, now + 0.10);
+      osc2.connect(g2);
+      g2.connect(this.masterGain);
+      osc2.start(now + 0.05);
+      osc2.stop(now + 0.10);
+      this.registerNode(osc2);
+    }
+
+    // Trigger procedural sound by identifier
+    playById(id) {
+      switch(id) {
+        case 'wake': this.playWakeChime(); break;
+        case 'curious': this.playCurious(); break;
+        case 'happy': this.playCoo(); break;
+        case 'giggle': this.playGiggle(); break;
+        case 'excited': this.playExcited(); break;
+        case 'surprised': this.playSurprised(); break;
+        case 'grumble': this.playGrumble(); break;
+        case 'whine': this.playWhine(); break;
+        case 'yawn': this.playYawn(); break;
+        case 'purr': this.playPurr(); break;
+        case 'bargein': this.playBargeIn(); break;
+        case 'chirp': this.playChirp(); break;
+        default: this.playChirp(); break;
+      }
+    }
+
+    // Emotion state transition mapping
+    playForEmotion(emotion, options = {}) {
+      if (!this.enabled) return;
+      if (typeof talking !== 'undefined' && talking && !options.force) return;
+
+      const now = Date.now();
+      if (now - this.lastPlayedTime < 650 && this.lastPlayedSound === emotion && !options.force) return;
+
+      switch (emotion) {
+        case 'happy': this.playCoo(); break;
+        case 'excited': this.playExcited(); break;
+        case 'curious': this.playCurious(); break;
+        case 'surprised': this.playSurprised(); break;
+        case 'alert': this.playChirp(1.2); break;
+        case 'confused': this.playCurious(); break;
+        case 'annoyed':
+        case 'frustrated':
+        case 'grumpy': this.playGrumble(); break;
+        case 'sad':
+        case 'whining': this.playWhine(); break;
+        case 'sleepy': this.playYawn(); break;
+        case 'proud':
+        case 'love':
+        case 'affectionate': this.playPurr(); break;
+        case 'playful': this.playGiggle(); break;
+        default: break;
+      }
+    }
+  }
+
+  const cozmoSoundEngine = new CozmoSoundEngine();
+  window.cozmoSoundEngine = cozmoSoundEngine;
+
+  function playCozmoWakeChime(){
+    cozmoSoundEngine.playWakeChime();
   }
 
   function startMicMeter(stream){
@@ -7020,7 +7543,10 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
     if(typeof voiceEngine !== 'undefined' && voiceEngine) {
       voiceEngine.setMode(VoiceMode.ACTIVE_LISTENING);
     }
-    setState('listening', 'user interrupted · Max listening');
+    if(reason === 'barge-in' && typeof cozmoSoundEngine !== 'undefined'){
+      cozmoSoundEngine.playBargeIn();
+    }
+    setState('listening', 'user interrupted · Max listening', {silent: true});
     showCaption('MAX LISTENING\nListening to you…', true);
   }
   window.stopSpeakingAndListen = stopSpeakingAndListen;
@@ -7364,6 +7890,7 @@ function runDevChecks(){
       ["Multi-person memory registry",!!(roboMemory&&Array.isArray(roboMemory.persons)&&roboMemory.persons.length>0)],
       ["Active identity resolver",typeof findFaceMatch==="function"&&typeof setActivePerson==="function"],
       ["Live face → social coupling",typeof deriveLiveSocialFromFaces==="function"],
+      ["Module 9 Cozmo sound FX engine", (()=>{ try{ return Boolean(cozmoSoundEngine); }catch(_){ return false; } })()],
       ["Module 10 intent & action engine", (()=>{ try{ return Boolean(robotActionEngine); }catch(_){ return false; } })()],
       ["Module 11 planning & autonomy", (()=>{ try{ return Boolean(autonomousPlanner); }catch(_){ return false; } })()],
       ["Module 12 robot body connection", (()=>{ try{ return Boolean(robotConnectionManager); }catch(_){ return false; } })()],
@@ -7612,6 +8139,49 @@ function runDevChecks(){
   $("#rerunDevChecksBtn")?.addEventListener("click", () => {
     runDevChecks();
     devLog("CHECK", "All system checks re-evaluated by developer");
+  });
+
+  // Cozmo Procedural Sound FX UI Controls (Phase B)
+  const sfxToggleBtn = $("#sfxToggleBtn");
+  const sfxVolSlider = $("#sfxVolumeSlider");
+  const sfxVolVal = $("#sfxVolumeVal");
+  const sfxStatusLabel = $("#sfxStatusLabel");
+
+  if (sfxVolSlider && sfxVolVal) {
+    sfxVolSlider.value = Math.round(cozmoSoundEngine.volume * 100);
+    sfxVolVal.textContent = `${sfxVolSlider.value}%`;
+    sfxVolSlider.addEventListener("input", (e) => {
+      const val = Number(e.target.value) || 0;
+      sfxVolVal.textContent = `${val}%`;
+      cozmoSoundEngine.setVolume(val / 100);
+    });
+  }
+
+  if (sfxToggleBtn) {
+    sfxToggleBtn.textContent = `SOUND FX: ${cozmoSoundEngine.enabled ? 'ON' : 'OFF'}`;
+    sfxToggleBtn.classList.toggle("active", cozmoSoundEngine.enabled);
+    if (sfxStatusLabel) {
+      sfxStatusLabel.textContent = cozmoSoundEngine.enabled ? 'READY' : 'MUTED';
+      sfxStatusLabel.style.color = cozmoSoundEngine.enabled ? '#7ee59a' : '#ff7777';
+    }
+    sfxToggleBtn.addEventListener("click", () => {
+      cozmoSoundEngine.setEnabled(!cozmoSoundEngine.enabled);
+      sfxToggleBtn.textContent = `SOUND FX: ${cozmoSoundEngine.enabled ? 'ON' : 'OFF'}`;
+      sfxToggleBtn.classList.toggle("active", cozmoSoundEngine.enabled);
+      if (sfxStatusLabel) {
+        sfxStatusLabel.textContent = cozmoSoundEngine.enabled ? 'READY' : 'MUTED';
+        sfxStatusLabel.style.color = cozmoSoundEngine.enabled ? '#7ee59a' : '#ff7777';
+      }
+      devLog("SFX", `Cozmo sound effects ${cozmoSoundEngine.enabled ? 'enabled' : 'muted'}`);
+    });
+  }
+
+  document.querySelectorAll(".sfxPlayBtn[data-sfx]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const sfxId = btn.dataset.sfx;
+      cozmoSoundEngine.playById(sfxId);
+      devLog("SFX", `Manual sound trigger · ${sfxId}`);
+    });
   });
 
 $("#clearLogs")?.addEventListener("click",()=>{
