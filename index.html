@@ -1073,6 +1073,8 @@ button{font:inherit}
     trackId:null, personId:null, name:null, confidence:0,
     establishedAt:0, lastSeenAt:0, box:null
   };
+  let activeTargetMismatchFrames = 0;
+  let activeTargetMismatchSince = 0;
 
   // v2.81: Fresh identities require short multi-pass consensus. One
   // ambiguous recognition result cannot attach a name to a new target.
@@ -2060,6 +2062,8 @@ button{font:inherit}
 
   function releaseActiveFaceTarget(reason='target-disappeared'){
     resetIdentityChallenger();
+    activeTargetMismatchFrames=0;
+    activeTargetMismatchSince=0;
     activeFaceTarget={trackId:null,personId:null,name:null,confidence:0,establishedAt:0,lastSeenAt:0,box:null};
     stableTargetPersonId=null; stableTargetIdentity=null; stableTargetSince=0;
     stableTargetHoldUntil=0; stableTargetLastSeenAt=0; stableTargetLastBox=null;
@@ -2111,15 +2115,21 @@ button{font:inherit}
       ? (second-distance)
       : null;
 
+    const isSameCandidate =
+      pendingIdentityPersonId===candidateId ||
+      (pendingIdentityName && (
+        pendingIdentityName.toLowerCase()===candidateName.toLowerCase() ||
+        pendingIdentityName.toLowerCase().replace(/b/g,'v')===candidateName.toLowerCase().replace(/b/g,'v') ||
+        (typeof arePersonRecordsRelated==='function' && arePersonRecordsRelated(pendingIdentityPersonId, candidateId))
+      ));
+
     const withinWindow=
-      pendingIdentityPersonId===candidateId &&
+      isSameCandidate &&
       pendingIdentityLastAt>0 &&
       (now-pendingIdentityLastAt)<=6000;
 
-    // v2.81: resolve ambiguous new targets using temporal consensus instead
-    // of rejecting them solely because two stored identities are close in a
-    // single frame. This is critical for the second saved face on mobile.
-    const credibleDistance=Number.isFinite(distance) && distance<=0.62;
+    // v2.81/v2.96: resolve new targets using threshold-based validation
+    const credibleDistance=Number.isFinite(distance) && distance<=Math.max(0.68, faceRecognitionThreshold);
 
     if(!credibleDistance){
       if(!withinWindow){
@@ -2145,9 +2155,8 @@ button{font:inherit}
     }
     pendingIdentityLastAt=now;
 
-    // Strongly separated candidates need two consecutive wins; ambiguous
-    // candidates need three consecutive wins from the same person.
-    const required = margin>=0.12 ? 2 : 3;
+    // High-confidence match (<=0.42) or well-separated candidate locks in quickly; ambiguous takes 2 passes
+    const required = (distance <= 0.42 || (margin != null && margin >= 0.10)) ? 1 : 2;
     if(pendingIdentityStreak<required || (now-pendingIdentityStartedAt)>6000){
       return null;
     }
@@ -2457,13 +2466,27 @@ button{font:inherit}
             faceRecognitionDistance=Number(matched.match.distance);
           }
           if(matched){
+            activeTargetMismatchFrames=0;
+            activeTargetMismatchSince=0;
             preserveActiveTargetIdentity(primary, 'identity-verified');
           }else{
-            // Face in camera does not match the active target identity!
-            primary.identity='UNKNOWN';
-            primary.personId=null;
-            primary.identityConfidence=0;
-            releaseActiveFaceTarget('face-mismatch');
+            // Face in camera does not match active target identity:
+            // Apply debounce grace period so momentary blurs/turns don't immediately wipe identity
+            if(!activeTargetMismatchSince) activeTargetMismatchSince=Date.now();
+            activeTargetMismatchFrames=(activeTargetMismatchFrames||0)+1;
+            const mismatchDuration=Date.now()-activeTargetMismatchSince;
+
+            if(mismatchDuration>2200 && activeTargetMismatchFrames>=8){
+              primary.identity='UNKNOWN';
+              primary.personId=null;
+              primary.identityConfidence=0;
+              releaseActiveFaceTarget('face-mismatch');
+              activeTargetMismatchFrames=0;
+              activeTargetMismatchSince=0;
+            }else{
+              // Grace period: preserve confirmed identity across momentary frame blurs
+              preserveActiveTargetIdentity(primary, 'identity-grace-hold');
+            }
           }
         }else if(primary.personId){
           const person=roboMemory?.persons?.find(p=>p.personId===primary.personId);
@@ -2672,13 +2695,13 @@ button{font:inherit}
     // without a separation requirement. This is the key anti-flicker rule.
     const knownTargetAccept =
       samePersonAlreadyActive &&
-      best.distance <= Math.min(0.62, threshold + 0.02);
+      best.distance <= Math.max(0.68, threshold + 0.04);
 
     // New target: accept a credible best-person candidate even when the
     // instantaneous margin is small. Temporal consensus will decide whether
     // the same person keeps winning across frames.
     const newTargetCandidate =
-      best.distance <= Math.min(0.62, threshold);
+      best.distance <= Math.max(0.64, threshold);
 
     if(knownTargetAccept || newTargetCandidate){
       return {
@@ -2970,10 +2993,15 @@ button{font:inherit}
     const lostFor=performance.now()-faceTargetLostAt;
     if(lostFor>FACE_TARGET_REACQUIRE_WINDOW_MS) return false;
 
+    // If single person is in camera view returning within reacquire window, it's the same target
+    if(faceDetections.length<=1){
+      return true;
+    }
+
     if(!isValidFaceBox(activeFaceTarget.box) || !isValidFaceBox(primary.box)) return false;
     const dist=boxDistance(activeFaceTarget.box,primary.box);
     const iou=boxIoU(activeFaceTarget.box,primary.box);
-    return iou>=0.20 || dist<=Math.max(90,Math.min(camera.videoWidth||720,camera.videoHeight||1280)*0.16);
+    return iou>=0.08 || dist<=Math.max(180,Math.min(camera.videoWidth||720,camera.videoHeight||1280)*0.45);
   }
 
   function enforceTargetLifecycle(now=performance.now()) {
@@ -3162,7 +3190,7 @@ button{font:inherit}
           faceTarget.identityConfidence=activeFaceTarget.confidence;
         }else if(!faceTarget.trackId){
           faceTarget.trackId=`track-${++stableTargetGeneration}`;
-        }else if(reacquired){
+        }else if(reacquired && !sameTargetAfterGap){
           faceTarget.trackId=`track-${++stableTargetGeneration}`;
         }
         if(activeFaceTarget.personId && activeFaceTarget.trackId===faceTarget.trackId && !targetChanged){
@@ -3173,8 +3201,8 @@ button{font:inherit}
           /* A detector box moving is NOT a new person. Keep the confirmed
              identity attached to the continuous track. Only clear identity
              when the previous target was genuinely lost/replaced. */
-          const wasReacquired=Boolean(reacquired || !previousTarget);
-          if(wasReacquired && activeFaceTarget.trackId && activeFaceTarget.trackId!==primary.trackId){
+          const wasReacquired=Boolean((reacquired || !previousTarget) && !sameTargetAfterGap);
+          if(wasReacquired && activeFaceTarget.trackId && activeFaceTarget.trackId!==primary.trackId && (mapped.length>1 || (Date.now()-(activeFaceTarget.lastSeenAt||0))>FACE_TARGET_REACQUIRE_WINDOW_MS)){
             releaseActiveFaceTarget('new-target-acquired');
           }
           if(wasReacquired){
@@ -3735,6 +3763,121 @@ button{font:inherit}
     }
   }
 
+  function areNamesPhoneticallySimilar(n1, n2){
+    if(!n1 || !n2) return false;
+    const a = String(n1).toLowerCase().trim();
+    const b = String(n2).toLowerCase().trim();
+    if(a === b) return true;
+    const norm = (s) => s.replace(/bijoy/g, 'vijay').replace(/b/g, 'v').replace(/o/g, 'a').replace(/y/g, 'j');
+    if(norm(a) === norm(b)) return true;
+
+    const minLen = Math.min(a.length, b.length);
+    const maxLen = Math.max(a.length, b.length);
+    if(maxLen - minLen > 2) return false;
+    let d = 0;
+    for(let i = 0; i < minLen; i++){
+      if(a[i] !== b[i]) d++;
+    }
+    d += (maxLen - minLen);
+    return d <= 2;
+  }
+
+  function arePersonRecordsRelated(id1, id2){
+    if(!id1 || !id2 || !roboMemory?.persons) return false;
+    if(String(id1) === String(id2)) return true;
+    const p1 = roboMemory.persons.find(p => p.personId === id1);
+    const p2 = roboMemory.persons.find(p => p.personId === id2);
+    if(!p1 || !p2) return false;
+    const n1 = String(p1.displayName || '').trim();
+    const n2 = String(p2.displayName || '').trim();
+    if(n1 && n2 && areNamesPhoneticallySimilar(n1, n2)) return true;
+    if(Array.isArray(p1.aliases) && p1.aliases.some(a => a && n2 && areNamesPhoneticallySimilar(a, n2))) return true;
+    if(Array.isArray(p2.aliases) && p2.aliases.some(a => a && n1 && areNamesPhoneticallySimilar(a, n1))) return true;
+    return false;
+  }
+
+  function consolidateDuplicatePersonProfiles(mem){
+    if(!mem || !Array.isArray(mem.persons) || mem.persons.length <= 1) return 0;
+    let mergedCount = 0;
+
+    for(let i = 0; i < mem.persons.length; i++){
+      const p1 = mem.persons[i];
+      if(!p1) continue;
+      const name1 = String(p1.displayName || '').trim();
+      const p1Descriptors = (p1.faceProfiles || []).map(fp => normalizeFaceDescriptor(fp?.descriptor)).filter(Boolean);
+
+      for(let j = i + 1; j < mem.persons.length; j++){
+        const p2 = mem.persons[j];
+        if(!p2) continue;
+        const name2 = String(p2.displayName || '').trim();
+        const p2Descriptors = (p2.faceProfiles || []).map(fp => normalizeFaceDescriptor(fp?.descriptor)).filter(Boolean);
+
+        const sameName = (name1 && name2 && (name1.toLowerCase() === name2.toLowerCase() || p1.aliases?.some(a => String(a).toLowerCase() === name2.toLowerCase()) || p2.aliases?.some(a => String(a).toLowerCase() === name1.toLowerCase())));
+        const phoneticMatch = areNamesPhoneticallySimilar(name1, name2);
+
+        let minFaceDist = Infinity;
+        for(const d1 of p1Descriptors){
+          for(const d2 of p2Descriptors){
+            const dist = faceDistance(d1, d2);
+            if(Number.isFinite(dist) && dist < minFaceDist) minFaceDist = dist;
+          }
+        }
+        const biometricMatch = (minFaceDist <= 0.38);
+
+        if(sameName || (phoneticMatch && (minFaceDist <= 0.48 || (!p1Descriptors.length || !p2Descriptors.length))) || biometricMatch){
+          const target = (p2.personId === 'primary-user' || (!p1.displayName && p2.displayName)) ? p2 : p1;
+          const source = (target === p1) ? p2 : p1;
+
+          if(source.displayName && target.displayName !== source.displayName){
+            if(!Array.isArray(target.aliases)) target.aliases = [];
+            if(!target.aliases.includes(source.displayName)) target.aliases.push(source.displayName);
+          }
+          if(Array.isArray(source.aliases)){
+            if(!Array.isArray(target.aliases)) target.aliases = [];
+            for(const a of source.aliases){
+              if(a && !target.aliases.includes(a) && a !== target.displayName) target.aliases.push(a);
+            }
+          }
+          if(Array.isArray(source.faceProfiles)){
+            if(!Array.isArray(target.faceProfiles)) target.faceProfiles = [];
+            for(const sFp of source.faceProfiles){
+              target.faceProfiles.push({ ...sFp, personId: target.personId, displayName: target.displayName });
+            }
+          }
+          if(Array.isArray(source.facts)){
+            if(!Array.isArray(target.facts)) target.facts = [];
+            for(const f of source.facts){
+              target.facts.push({ ...f, personId: target.personId });
+            }
+          }
+          if(Array.isArray(source.memories)){
+            if(!Array.isArray(target.memories)) target.memories = [];
+            for(const m of source.memories){
+              target.memories.push({ ...m, personId: target.personId });
+            }
+          }
+          target.updatedAt = Math.max(target.updatedAt || 0, source.updatedAt || 0, Date.now());
+          normalizePersonFaceProfileBank(target);
+
+          if(mem.activePersonId === source.personId){
+            mem.activePersonId = target.personId;
+          }
+          const removeIdx = (target === p1) ? j : i;
+          mem.persons.splice(removeIdx, 1);
+          mergedCount++;
+          devLog('MEMORY', `Consolidated duplicate person profile: ${source.displayName} into ${target.displayName}`, { targetId: target.personId });
+          if(target === p2) {
+            i--;
+            break;
+          } else {
+            j--;
+          }
+        }
+      }
+    }
+    return mergedCount;
+  }
+
   function ensureMemoryRegistry(){
     if(!roboMemory) return null;
 
@@ -3805,6 +3948,8 @@ button{font:inherit}
     importLegacyFaceProfileStore();
 
     // Re-normalize after any recovered templates/names were added.
+    roboMemory.persons.forEach(normalizePersonFaceProfileBank);
+    consolidateDuplicatePersonProfiles(roboMemory);
     roboMemory.persons.forEach(normalizePersonFaceProfileBank);
 
     roboMemory.primaryPersonId='primary-user';
