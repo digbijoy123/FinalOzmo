@@ -9080,7 +9080,7 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
     const savedElevenVoice = localStorage.getItem('robo_elevenlabs_voice_id');
     if(savedElevenVoice) headers['x-elevenlabs-voice-id'] = savedElevenVoice;
 
-    const response=await fetch('/api/robo',{
+    let response=await fetch('/api/robo',{
       method:'POST',
       headers,
       cache:'no-store',
@@ -9098,21 +9098,44 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
         message=data?.error||message;
         code=data?.code||code;
       }catch(_){}
-      if(response.status === 503 || code === 'TTS_NOT_CONFIGURED' || /not configured/i.test(message)){
-        elevenLabsQuotaExhausted = true;
-        devLog('TTS', 'ElevenLabs not configured on server · auto-disabled to prevent lag');
+
+      // Self-healing auto-recovery: if user hit 402 library voice restriction, automatically retry with Rachel preset!
+      if(response.status === 402 || /library voices/i.test(message)){
+        devLog('TTS', 'Community voice restricted on free tier. Auto-recovering with free preset Rachel (21m00Tcm4TlvDq8ikWAM)...');
+        localStorage.setItem('robo_elevenlabs_voice_id', '21m00Tcm4TlvDq8ikWAM');
+        const vInput = $('#elevenVoiceInput');
+        if(vInput) vInput.value = '21m00Tcm4TlvDq8ikWAM';
+        if(typeof syncVoicePresetButtons === 'function') syncVoicePresetButtons('21m00Tcm4TlvDq8ikWAM');
+        headers['x-elevenlabs-voice-id'] = '21m00Tcm4TlvDq8ikWAM';
+        const retryRes = await fetch('/api/robo', {
+          method: 'POST',
+          headers,
+          cache: 'no-store',
+          body: JSON.stringify({ tts: true, text: String(text || ''), languageHint: languageHint || 'en' })
+        });
+        if(retryRes.ok){
+          showCaption('Switched to Free Preset: Rachel', true);
+          hideCaption(2500);
+          response = retryRes;
+        }
       }
-      if(response.status === 402 || /Free users cannot use library voices/i.test(message)){
-        showCaption('⚠️ ElevenLabs Free Plan: Community voices are paid.\nPick Rachel/Adam in DEV or use your own VoiceLab clone!', true);
-        hideCaption(6000);
-        devLog('TTS', 'ElevenLabs Free tier limitation · Community library voices are restricted over API. Switch to Rachel, Adam, or your own VoiceLab clone.');
+
+      if(!response.ok){
+        if(response.status === 503 || code === 'TTS_NOT_CONFIGURED' || /not configured/i.test(message)){
+          elevenLabsQuotaExhausted = true;
+          devLog('TTS', 'ElevenLabs not configured on server · auto-disabled to prevent lag');
+        }
+        if(response.status === 402 || /Free users cannot use library voices/i.test(message)){
+          showCaption('⚠️ ElevenLabs Free Plan: Community voices are paid.\nUsing Rachel preset or your own VoiceLab clone!', true);
+          hideCaption(5000);
+        }
+        log('TTS ERROR · ElevenLabs HTTP '+response.status+' · '+code+' · '+message);
+        ttsDiag('ERROR · ElevenLabs HTTP '+response.status+' · '+code+' · '+message);
+        const err=new Error(message);
+        err.code=code;
+        err.httpStatus=response.status;
+        throw err;
       }
-      log('TTS ERROR · ElevenLabs HTTP '+response.status+' · '+code+' · '+message);
-      ttsDiag('ERROR · ElevenLabs HTTP '+response.status+' · '+code+' · '+message);
-      const err=new Error(message);
-      err.code=code;
-      err.httpStatus=response.status;
-      throw err;
     }
 
     const ttsLanguage=response.headers.get('X-Robo-TTS-Language')||languageHint||'unknown';
@@ -10854,9 +10877,29 @@ function hookRecognitionDiagnostics(r){
   const geminiInput = $('#geminiKeyInput');
   const elevenInput = $('#elevenKeyInput');
   const elevenVoiceInput = $('#elevenVoiceInput');
+
+  // Auto-migrate away from blocked community voice to free preset Rachel
+  const savedV = localStorage.getItem('robo_elevenlabs_voice_id');
+  if (!savedV || savedV === 'SLa3GDQHUGaRpH5GNvFL') {
+    localStorage.setItem('robo_elevenlabs_voice_id', '21m00Tcm4TlvDq8ikWAM');
+  }
+
+  function syncVoicePresetButtons(currentVoiceId){
+    const activeId = currentVoiceId || localStorage.getItem('robo_elevenlabs_voice_id') || '21m00Tcm4TlvDq8ikWAM';
+    $$('.voicePresetBtn').forEach(btn => {
+      const vId = btn.getAttribute('data-voice');
+      const isSelected = (vId === activeId);
+      btn.style.borderColor = isSelected ? 'var(--cyan)' : 'rgba(255,255,255,.18)';
+      btn.style.background = isSelected ? 'rgba(95,212,208,.25)' : 'rgba(255,255,255,.08)';
+      btn.style.color = isSelected ? 'var(--cyan)' : '#fff';
+      btn.style.fontWeight = isSelected ? '700' : '400';
+    });
+  }
+
   if (geminiInput) geminiInput.value = localStorage.getItem('robo_gemini_api_key') || '';
   if (elevenInput) elevenInput.value = localStorage.getItem('robo_elevenlabs_api_key') || '';
-  if (elevenVoiceInput) elevenVoiceInput.value = localStorage.getItem('robo_elevenlabs_voice_id') || '';
+  if (elevenVoiceInput) elevenVoiceInput.value = localStorage.getItem('robo_elevenlabs_voice_id') || '21m00Tcm4TlvDq8ikWAM';
+  syncVoicePresetButtons();
 
   function updateElevenKeyStatus(){
     const val = elevenInput?.value?.trim() || '';
@@ -10892,6 +10935,7 @@ function hookRecognitionDiagnostics(r){
     else localStorage.removeItem('robo_elevenlabs_voice_id');
 
     updateElevenKeyStatus();
+    syncVoicePresetButtons(eVoice);
 
     if (eKey && (!eKey.startsWith('sk_') || (eKey.length !== 51 && eKey.length !== 32))) {
       showCaption(`⚠️ ELEVENLABS KEY INVALID (${eKey.length} chars)\nMust be 51 chars! Click "+ Create API Key" in ElevenLabs & copy from popup.`, true);
@@ -10911,6 +10955,7 @@ function hookRecognitionDiagnostics(r){
       if (elevenVoiceInput && vId) {
         elevenVoiceInput.value = vId;
         localStorage.setItem('robo_elevenlabs_voice_id', vId);
+        syncVoicePresetButtons(vId);
         showCaption('Voice set to: ' + btn.textContent.trim(), true);
         hideCaption(2000);
         devLog('TTS', 'Selected voice preset: ' + btn.textContent.trim() + ' (' + vId + ')');
