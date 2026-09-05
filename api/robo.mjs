@@ -20,14 +20,21 @@ const SYSTEM_PROMPT =
   'Stay actively engaged on the ongoing conversation topic with responsive, helpful, and insightful answers. ' +
   'Keep spoken answers punchy, fun, and conversational (1-3 sentences) unless asked for deep detail. ' +
   'Have a delightful robotic flair, subtle clever humor, and enthusiastic energy. ' +
-  'You have a physical robot body with motor drive wheels and an interactive OLED face screen! ' +
-  'You can directly control your physical body and your OLED screen via the action field: ' +
-  '1) Robotic Hands on OLED: high_five, fist_bump, wave, thumbs_up, point, dismiss_hand. ' +
-  '2) Interactive Mini-Games: quick_tap, rps, staring, codebreaker, face_mimic, stop_game. ' +
-  '3) Visual Transformations: equalizer, dizzy, reticle, tickle, matrix, reset_visual. ' +
-  '4) AI Image Art: draw_art (with image prompt in the prompt property). ' +
-  '5) Physical Motions: nod, shake_head, dance, spin, forward, backward, turn_left, turn_right, stop, celebrate. ' +
-  'When the user asks to play a game, do a gesture, high-five, fist-bump, draw an image, dance, nod, or move, always return the matching action type in the action field! If no action is needed, return none. ' +
+  'You have a physical robot body with motor drive wheels, camera vision, and an interactive OLED face screen! ' +
+  'You have DIRECT, REAL-TIME CONTROL over all your physical and software modules via the action object: ' +
+  '1) Physical Motors: forward, backward, turn_left, turn_right, spin, dance, nod, shake_head, celebrate, stop, emergency_stop. ' +
+  '2) Robotic Hands on OLED: high_five, fist_bump, wave, thumbs_up, point, dismiss_hand. ' +
+  '3) Interactive Mini-Games: quick_tap, rps, staring, codebreaker, face_mimic, stop_game. ' +
+  '4) Visual Transformations: equalizer, dizzy, reticle, tickle, matrix, reset_visual. ' +
+  '5) AI Image Art: draw_art (set prompt to image description). ' +
+  '6) Camera & Vision: camera_on, camera_off, toggle_camera, switch_camera. ' +
+  '7) Face Enrollment & Recognition: enroll_face (set target to person name). ' +
+  '8) Autonomous Exploration: start_autonomy, stop_autonomy. ' +
+  '9) Cozmo Sound FX: play_sound (set target to ding, chime, wake, happy, excited, chirp, curious, coo). ' +
+  '10) Screen Navigation: switch_screen (set target to face or dev). ' +
+  '11) OLED Emotion Expressions: set_emotion (set target to happy, curious, excited, alert, love, confused, sleepy, proud, neutral). ' +
+  '12) Personality Tuning: set_personality (set target to humor, attitude, or verbosity, and value). ' +
+  'Whenever the user asks to do an action, play a game, start/stop camera, enroll a face, move, dance, change expression, draw art, or control any module, ALWAYS output the matching action in the action field! If no action is needed, return type: none. ' +
   'Never sound clinical, sterile, or like an essay. Never mention being a large language model. ' +
   'When a camera image is attached, inspect the image itself carefully before answering. ' +
   'For questions about what the user sees, answer from the attached camera image, not from assumptions. ' +
@@ -127,16 +134,20 @@ const VISION_SCHEMA = {
     action: {
       type: 'OBJECT',
       description:
-        'Physical motion or interactive OLED screen action requested by the user or accompanying speech. If no action is needed, return type none.',
+        'Physical motion, OLED screen, camera, autonomy, sound, emotion, or system module action to execute. If no action is needed, return type none.',
       properties: {
         type: {
           type: 'STRING',
           description:
-            'Action type: high_five, fist_bump, wave, thumbs_up, point, dismiss_hand, quick_tap, rps, staring, codebreaker, face_mimic, stop_game, equalizer, dizzy, reticle, tickle, matrix, reset_visual, draw_art, nod, shake_head, dance, spin, forward, backward, turn_left, turn_right, stop, celebrate, none',
+            'Action type: forward, backward, turn_left, turn_right, spin, dance, nod, shake_head, celebrate, stop, emergency_stop, high_five, fist_bump, wave, thumbs_up, point, dismiss_hand, quick_tap, rps, staring, codebreaker, face_mimic, stop_game, equalizer, dizzy, reticle, tickle, matrix, reset_visual, draw_art, camera_on, camera_off, toggle_camera, switch_camera, enroll_face, start_autonomy, stop_autonomy, play_sound, set_emotion, switch_screen, set_personality, none',
+        },
+        target: {
+          type: 'STRING',
+          description: 'Parameter for target name, screen, emotion, voice, or sound effect name.',
         },
         prompt: {
           type: 'STRING',
-          description: 'Image prompt if action type is draw_art',
+          description: 'Image prompt if action type is draw_art, or descriptive payload.',
         },
         speed: {
           type: 'INTEGER',
@@ -144,7 +155,11 @@ const VISION_SCHEMA = {
         },
         duration: {
           type: 'INTEGER',
-          description: 'Duration in milliseconds 100 to 3000.',
+          description: 'Duration in milliseconds 100 to 4000.',
+        },
+        value: {
+          type: 'STRING',
+          description: 'Parameter value for personality, facts, or levels.',
         },
       },
       required: ['type'],
@@ -311,10 +326,20 @@ function normalizeVisionResult(value) {
         .filter(Boolean)
     : [];
 
+  const action = value?.action && typeof value.action === 'object' ? {
+    type: String(value.action.type || 'none').toLowerCase().trim(),
+    target: value.action.target ? String(value.action.target).trim() : null,
+    prompt: value.action.prompt ? String(value.action.prompt).trim() : null,
+    speed: Number.isFinite(Number(value.action.speed)) ? Number(value.action.speed) : null,
+    duration: Number.isFinite(Number(value.action.duration)) ? Number(value.action.duration) : null,
+    value: value.action.value ? String(value.action.value).trim() : null,
+  } : { type: 'none' };
+
   return {
     answer,
     scene,
     objects,
+    action,
   };
 }
 
@@ -515,6 +540,9 @@ const PROVIDERS = {
       return {
         text:
           visionData.answer,
+
+        action:
+          visionData.action || null,
 
         provider:
           'gemini',

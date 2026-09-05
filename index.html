@@ -8664,7 +8664,7 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
     };
   }
 
-  function localFallback(text){
+  function localFallback(text, err = null){
     const l=(text||'').toLowerCase().trim();
     if(!l) return "I didn't catch that, but I'm all ears!";
     if(/\b(hi|hello|hey|greetings|howdy)\b/.test(l)){
@@ -8696,7 +8696,14 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
       return "Wheeeee! Doing a full 360 spin for you!";
     }
     if(/test/.test(l)) return "All systems nominal! Brain, sensors, and wit are fully functional!";
-    return "I heard you: " + text.trim() + ". My circuits are on it!";
+
+    if (err?.code === 'AI_TIMEOUT') {
+      return "My brain connection timed out just now. Could you please say that again? I'm listening!";
+    }
+    if (err?.code === 'AI_NOT_CONFIGURED') {
+      return "My Gemini AI brain key is not configured. Please set the API key in settings!";
+    }
+    return "I heard you, but my connection to the AI brain had a hiccup! Please say that again, I'm ready!";
   }
 
   const visionCanvas=document.createElement('canvas');
@@ -9222,44 +9229,64 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
     const savedGeminiKey = localStorage.getItem('robo_gemini_api_key');
     if(savedGeminiKey) headers['x-gemini-key'] = savedGeminiKey;
 
-    // Mobile Cellular Latency Guard: 8.5s client abort timeout before Vercel's strict 10s limit
-    const brainTimeoutMs = 8500;
-    const timeoutController = new AbortController();
-    let timedOut = false;
-    const timer = setTimeout(() => {
-      timedOut = true;
-      try { timeoutController.abort(); } catch(_) {}
-    }, brainTimeoutMs);
-
-    if (signal) {
-      if (signal.aborted) {
-        try { timeoutController.abort(); } catch(_) {}
-      } else {
-        signal.addEventListener('abort', () => {
-          try { timeoutController.abort(); } catch(_) {}
-        }, { once: true });
-      }
-    }
-
+    // Resilient Mobile Latency Guard: 24s client abort timeout matching Vercel's 60s maxDuration
+    const brainTimeoutMs = 24000;
     let res = null;
-    try {
-      res = await fetch('/api/robo',{
-        method:'POST',
-        headers,
-        body:JSON.stringify(payload),
-        signal: timeoutController.signal
-      });
-    } catch (fetchErr) {
-      clearTimeout(timer);
-      if (timedOut) {
-        devLog("AI ERROR", `AI_TIMEOUT · Brain connection timed out after ${brainTimeoutMs}ms`);
-        const err = new Error('Brain connection timed out');
-        err.code = 'AI_TIMEOUT';
-        throw err;
+    let attempts = 0;
+    const maxAttempts = 2;
+    let lastErr = null;
+
+    while (attempts < maxAttempts) {
+      attempts++;
+      const timeoutController = new AbortController();
+      let timedOut = false;
+      const timer = setTimeout(() => {
+        timedOut = true;
+        try { timeoutController.abort(); } catch(_) {}
+      }, brainTimeoutMs);
+
+      if (signal) {
+        if (signal.aborted) {
+          try { timeoutController.abort(); } catch(_) {}
+        } else {
+          signal.addEventListener('abort', () => {
+            try { timeoutController.abort(); } catch(_) {}
+          }, { once: true });
+        }
       }
-      throw fetchErr;
-    } finally {
-      clearTimeout(timer);
+
+      try {
+        res = await fetch('/api/robo', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(payload),
+          signal: timeoutController.signal
+        });
+        clearTimeout(timer);
+
+        if (!res.ok && res.status >= 500 && attempts < maxAttempts && !signal?.aborted) {
+          devLog("AI RETRY", `Server error ${res.status} on attempt ${attempts} · retrying request in 450ms...`);
+          await new Promise(r => setTimeout(r, 450));
+          continue;
+        }
+        break;
+      } catch (fetchErr) {
+        clearTimeout(timer);
+        if (timedOut) {
+          devLog("AI ERROR", `AI_TIMEOUT · Brain connection timed out after ${brainTimeoutMs}ms (attempt ${attempts}/${maxAttempts})`);
+          lastErr = new Error('Brain connection timed out');
+          lastErr.code = 'AI_TIMEOUT';
+        } else {
+          lastErr = fetchErr;
+        }
+
+        if (attempts < maxAttempts && !signal?.aborted) {
+          devLog("AI RETRY", `Brain request attempt ${attempts} failed (${lastErr?.code || lastErr?.message}) · retrying in 450ms...`);
+          await new Promise(r => setTimeout(r, 450));
+          continue;
+        }
+        throw lastErr;
+      }
     }
 
     let data = null;
@@ -9536,7 +9563,7 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
       }
       aiRequestInFlight=false;
       // v2.12 remains usable before an API key is installed.
-      const fallback=localFallback(clean);
+      const fallback=localFallback(clean, err);
       extractImplicitMemories(clean);
       recordEpisode(`User: "${clean.slice(0, 50)}"`, 'conversation', emotion);
       conversation.push({role:'assistant',content:fallback});
@@ -11231,7 +11258,8 @@ function hookRecognitionDiagnostics(r){
     inferActionFromText(text, userPrompt) {
       const combined = `${String(userPrompt || '')} ${String(text || '')}`.toLowerCase();
       // Emergency / Stop
-      if (/\b(emergency stop|e-stop|freeze)\b/.test(combined)) return { type: 'stop' };
+      if (/\b(emergency stop|e-stop|freeze)\b/.test(combined)) return { type: 'emergency_stop' };
+      if (/\b(stop moving|hold still|stay still|halt)\b/.test(combined)) return { type: 'stop' };
       if (/\b(stop game|exit game|quit game|end game|close game)\b/.test(combined)) return { type: 'stop_game' };
       if (/\b(dismiss hand|lower hand|hide hand)\b/.test(combined)) return { type: 'dismiss_hand' };
       if (/\b(reset screen|reset visual|normal eyes|normal screen|normal face)\b/.test(combined)) return { type: 'reset_visual' };
@@ -11257,6 +11285,40 @@ function hookRecognitionDiagnostics(r){
       if (/\b(matrix rain|cyberpunk rain|digital rain)\b/.test(combined)) return { type: 'matrix' };
       if (/\b(tickle|pet you|good robot)\b/.test(combined)) return { type: 'tickle' };
 
+      // Camera Controls
+      if (/\b(turn on camera|start camera|enable camera|open camera)\b/.test(combined)) return { type: 'camera_on' };
+      if (/\b(turn off camera|stop camera|disable camera|close camera)\b/.test(combined)) return { type: 'camera_off' };
+      if (/\b(switch camera|toggle camera|flip camera|change camera|rear camera|front camera)\b/.test(combined)) return { type: 'switch_camera' };
+
+      // Screen Navigation
+      if (/\b(dev screen|developer screen|dev page|developer diagnostics|debug screen)\b/.test(combined)) return { type: 'switch_screen', target: 'dev' };
+      if (/\b(face screen|robot face|show face|back to face)\b/.test(combined)) return { type: 'switch_screen', target: 'face' };
+      if (/\b(camera screen|show camera feed|view camera)\b/.test(combined)) return { type: 'switch_screen', target: 'camera' };
+
+      // Face Enrollment
+      const enrollM = combined.match(/\b(?:enroll|remember|learn|register)\s+(?:face\s+of\s+|my\s+face|me|this\s+person\s+as\s+)?([a-z0-9\s]{2,20})\b/i);
+      if (enrollM && !/\b(joke|game|screen|camera|sound)\b/.test(enrollM[1])) {
+        return { type: 'enroll_face', target: enrollM[1].trim() };
+      }
+
+      // Autonomy / Wandering
+      if (/\b(start autonomy|start wandering|enable autonomy|explore mode|wander around)\b/.test(combined)) return { type: 'start_autonomy' };
+      if (/\b(stop autonomy|stop wandering|disable autonomy|stay put)\b/.test(combined)) return { type: 'stop_autonomy' };
+
+      // Cozmo Sound FX
+      if (/\b(play sound|make a sound|sound effect|cozmo sound|play a chime|ring chime)\b/.test(combined)) {
+        if (/\b(ding|bell)\b/.test(combined)) return { type: 'play_sound', target: 'ding' };
+        if (/\b(happy|cheer)\b/.test(combined)) return { type: 'play_sound', target: 'happy' };
+        if (/\b(excited)\b/.test(combined)) return { type: 'play_sound', target: 'excited' };
+        if (/\b(curious)\b/.test(combined)) return { type: 'play_sound', target: 'curious' };
+        if (/\b(wake|chime)\b/.test(combined)) return { type: 'play_sound', target: 'wake' };
+        return { type: 'play_sound', target: 'chirp' };
+      }
+
+      // Emotion Expression
+      const emotionM = combined.match(/\b(?:look|be|become|express|show)\s+(happy|curious|excited|alert|love|confused|sleepy|proud|sad|surprised|neutral)\b/i);
+      if (emotionM) return { type: 'set_emotion', target: emotionM[1].toLowerCase() };
+
       // Physical Gestures
       if (/\b(dance|dancing|dance for me)\b/.test(combined)) return { type: 'dance' };
       if (/\b(spin around|spinning|spin)\b/.test(combined)) return { type: 'spin' };
@@ -11278,9 +11340,19 @@ function hookRecognitionDiagnostics(r){
       const speed = Number(action.speed) || 45;
       const duration = Number(action.duration) || 600;
 
-      devLog('ACTION', `Executing action: ${type}`, { speed, duration, prompt: action.prompt });
+      devLog('ACTION', `Executing action: ${type}`, { speed, duration, target: action.target, prompt: action.prompt, value: action.value });
 
-      // Physical motor actions
+      // 1. Emergency Stop & Movement Stop
+      if (type === 'emergency_stop' || type === 'estop') {
+        this.conn.emergencyStop('AI_BRAIN_ESTOP');
+        setState('alert', 'action · emergency stop');
+        return { type, estop: true };
+      }
+      if (type === 'stop') {
+        return this.stop();
+      }
+
+      // 2. Physical Motor Actions
       switch (type) {
         case 'forward':
           return this.forward(speed, duration);
@@ -11303,11 +11375,131 @@ function hookRecognitionDiagnostics(r){
           return this.shakeHead();
         case 'celebrate':
           return this.celebrate();
-        case 'stop':
-          return this.stop();
       }
 
-      // OLED Screen & Cozmo Interactive Engine routing
+      // 3. Camera Controls
+      if (type === 'camera_on') {
+        if (!cameraEnabled) {
+          toggleCamera().catch(err => console.warn('camera_on err', err));
+        }
+        return { type, camera: true };
+      }
+      if (type === 'camera_off') {
+        if (cameraEnabled) {
+          toggleCamera().catch(err => console.warn('camera_off err', err));
+        }
+        return { type, camera: false };
+      }
+      if (type === 'toggle_camera') {
+        toggleCamera().catch(err => console.warn('toggle_camera err', err));
+        return { type, toggled: true };
+      }
+      if (type === 'switch_camera') {
+        switchCamera().catch(err => console.warn('switch_camera err', err));
+        return { type, switched: true };
+      }
+
+      // 4. Screen Navigation
+      if (type === 'switch_screen') {
+        const scr = String(action.target || 'face').toLowerCase();
+        if (['face', 'camera', 'dev'].includes(scr) && typeof switchScreen === 'function') {
+          switchScreen(scr);
+          return { type, screen: scr };
+        }
+      }
+
+      // 5. Face Enrollment & Biometrics
+      if (type === 'enroll_face') {
+        const name = action.target || action.prompt || 'Friend';
+        if (window.faceEnrollmentWizard) {
+          window.faceEnrollmentWizard.start(name, 'friend');
+          return { type, target: name };
+        }
+      }
+
+      // 6. Autonomy / Exploration Engine
+      if (type === 'start_autonomy' || type === 'explore') {
+        if (typeof autonomousPlanner !== 'undefined' && autonomousPlanner) {
+          autonomousPlanner.autonomyEnabled = true;
+          const btn = document.getElementById('autonomyToggleBtn');
+          if (btn) {
+            btn.textContent = 'AUTONOMY: ON';
+            btn.classList.add('active');
+          }
+          devLog('AUTONOMY', 'Autonomy enabled via AI brain prompt');
+          return { type, autonomy: true };
+        }
+      }
+      if (type === 'stop_autonomy') {
+        if (typeof autonomousPlanner !== 'undefined' && autonomousPlanner) {
+          autonomousPlanner.autonomyEnabled = false;
+          const btn = document.getElementById('autonomyToggleBtn');
+          if (btn) {
+            btn.textContent = 'AUTONOMY: OFF';
+            btn.classList.remove('active');
+          }
+          devLog('AUTONOMY', 'Autonomy disabled via AI brain prompt');
+          return { type, autonomy: false };
+        }
+      }
+
+      // 7. Cozmo Sound FX Engine
+      if (type === 'play_sound') {
+        if (typeof cozmoSoundEngine !== 'undefined' && cozmoSoundEngine) {
+          const sfx = String(action.target || action.prompt || 'chirp').toLowerCase().trim();
+          if (sfx === 'ding') cozmoSoundEngine.playDing();
+          else cozmoSoundEngine.playById(sfx);
+          devLog('SFX', `Sound FX triggered via AI brain: ${sfx}`);
+          return { type, sound: sfx };
+        }
+      }
+
+      // 8. OLED Emotion Expressions
+      if (type === 'set_emotion') {
+        const emo = String(action.target || action.value || 'happy').toLowerCase().trim();
+        if (typeof setState === 'function') {
+          setState(emo, 'AI prompt emotion set', { intensity: 0.95, confidence: 1.0 });
+          devLog('EMOTION', `Emotion set via AI brain: ${emo}`);
+          return { type, emotion: emo };
+        }
+      }
+
+      // 9. Personality Tuning
+      if (type === 'set_personality') {
+        if (typeof roboMemory !== 'undefined' && roboMemory) {
+          if (!roboMemory.personality) roboMemory.personality = DEFAULT_PERSONALITY();
+          const target = String(action.target || '').toLowerCase().trim();
+          const val = action.value;
+          if (target.includes('humor')) {
+            const num = parseFloat(val) || 0.8;
+            roboMemory.personality.humor = num > 1 ? num / 100 : num;
+            if (document.getElementById('devHumorSlider')) document.getElementById('devHumorSlider').value = Math.round(roboMemory.personality.humor * 100);
+            if (document.getElementById('devHumorVal')) document.getElementById('devHumorVal').textContent = `${Math.round(roboMemory.personality.humor * 100)}%`;
+          } else if (target.includes('attitude')) {
+            roboMemory.personality.attitude = String(val || 'playful').toLowerCase();
+            if (document.getElementById('devAttitudeSelect')) document.getElementById('devAttitudeSelect').value = roboMemory.personality.attitude;
+            if (document.getElementById('devAttitudeVal')) document.getElementById('devAttitudeVal').textContent = roboMemory.personality.attitude;
+          } else if (target.includes('verbosity')) {
+            roboMemory.personality.verbosity = String(val || 'balanced').toLowerCase();
+            if (document.getElementById('devVerbositySelect')) document.getElementById('devVerbositySelect').value = roboMemory.personality.verbosity;
+          }
+          saveRoboMemory('personality-ai-action');
+          devLog('PERSONALITY', `Personality updated via AI brain: ${target} -> ${val}`);
+          return { type, target, value: val };
+        }
+      }
+
+      // 10. Clear Memory
+      if (type === 'clear_memory' || type === 'reset_memory') {
+        if (typeof roboMemory !== 'undefined' && roboMemory) {
+          roboMemory.resetMemory();
+          saveRoboMemory('reset-memory-ai-action');
+          devLog('MEMORY', 'Memory reset via AI brain prompt');
+          return { type, memoryCleared: true };
+        }
+      }
+
+      // 11. OLED Screen & Cozmo Interactive Engine routing
       if (typeof cozmoInteractiveEngine !== 'undefined' && cozmoInteractiveEngine) {
         if (typeof switchScreen === 'function') {
           switchScreen('face');
