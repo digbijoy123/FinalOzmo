@@ -4482,6 +4482,9 @@ button{font:inherit}
       totalRegisteredPeople:roboMemory.persons.length
     });
 
+    return { ok: true, person };
+  }
+
   function formatRelativeTime(timestamp){
     if(!timestamp) return 'earlier';
     const diff=Date.now()-Number(timestamp);
