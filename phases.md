@@ -189,5 +189,31 @@ state — never leave the app broken between phases.
   - Precise visual servoing: calculates center coordinates against video frame dimensions.
   - Live autonomy telemetry readout (`#devAutonomyStatus`) in Dev screen.
 
+### Phase E — Real-Time Adaptive Personality Engine & Live Developer Tuning [CURRENT PHASE]
+- **Voice-Driven Personality & Trait Engine**:
+  - Direct real-time verbal tuning of behavioral parameters via voice intent:
+    - Humor level ("Max, set humor to 90%", "be more funny/witty")
+    - Attitude / Sass ("Max, be sarcastic", "Max, be gentle and polite")
+    - Verbosity ("Max, keep answers super short", "Max, explain in detail")
+    - Dynamic custom directives ("Max, from now on call me Boss", "Max, act like an eccentric sci-fi droid")
+    - Reset commands ("Max, reset your personality to default")
+  - Seamless persistent storage in `roboMemory.personality` with instant verbal acknowledgment and Cozmo reaction sound.
+  - Real-time injection into `/api/robo` requests: dynamic directives are prepended/appended to Gemini system prompts on the very next sentence without reloading.
+- **Developer Screen Live Tuning Sliders (`#devScreen`)**:
+  - Cybernetic OLED-styled tuning card on the Dev screen:
+    - **Humor Slider**: `0%` (Deadpan/Serious) $\leftrightarrow$ `100%` (Stand-up Comedian)
+    - **Sass / Attitude Slider**: `0%` (Gentle Assistant) $\leftrightarrow$ `100%` (Feisty Cozmo)
+    - **Verbosity Control**: `Concise (1-2 sentences)` vs. `Detailed`
+    - **Live Custom Directives Input**: Real-time editable rule textarea with live save
+  - **Bidirectional Live Synchronization**: Changing a slider immediately updates `roboMemory.personality`; speaking a voice command immediately updates the Dev screen sliders in real time.
+- **Antigravity Fast Iteration Workflow**:
+  - Seamless pair-programming loop between Google Antigravity IDE and live Max runtime.
+  - Integration with Antigravity slash commands:
+    - `/learn`: Records and persists newly tuned behavioral patterns and voice commands into agent memory.
+    - `/grill-me`: Rapid interview and architectural alignment for complex emergent behaviors.
+    - `/goal`: Runs automated continuous calibration and regression test loops.
+- **Exit criteria**: Speaking to Max changes his personality and behavior immediately; the Dev screen sliders reflect and manipulate traits in real time; all 5 test suites pass clean.
+
+
 
 
