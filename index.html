@@ -147,6 +147,11 @@ button{font:inherit}
 .caption.show .bars i{animation:bar .5s ease-in-out infinite alternate}
 .bars i:nth-child(2){animation-delay:.08s}.bars i:nth-child(3){animation-delay:.16s}.bars i:nth-child(4){animation-delay:.24s}.bars i:nth-child(5){animation-delay:.32s}
 @keyframes bar{to{height:16px;opacity:.9}}
+.caption.speaking{border-color:rgba(0,255,170,.48)!important;box-shadow:0 10px 30px rgba(0,0,0,.85),0 0 22px rgba(0,255,170,.28)!important}
+.caption.speaking .captionTitle{color:#00ffaa!important;font-weight:800;letter-spacing:.16em}
+.caption.speaking .bars i{background:#00ffaa!important;opacity:.88}
+.caption.interrupted{border-color:rgba(255,183,3,.55)!important;box-shadow:0 10px 30px rgba(0,0,0,.85),0 0 20px rgba(255,183,3,.25)!important}
+.caption.interrupted .captionTitle{color:#ffb703!important}
 
 /* Bottom controls on Face screen: Non-congested sleek floating dock */
 .bottom{position:absolute;left:16px;right:16px;bottom:16px;z-index:31;display:flex;align-items:center;justify-content:space-between;gap:12px;min-width:0;overflow:visible;pointer-events:none}
@@ -5035,6 +5040,54 @@ button{font:inherit}
     captionTimer = setTimeout(() => caption.classList.remove("show"), ms);
   }
 
+  let liveTtsTimer = null;
+  let currentTtsSpokenText = '';
+
+  function showLiveTtsCaption(text) {
+    clearTimeout(captionTimer);
+    clearTimeout(liveTtsTimer);
+    currentTtsSpokenText = String(text || '').trim();
+    if (!currentTtsSpokenText) return;
+
+    const titleEl = caption.querySelector(".captionTitle");
+    if (titleEl) {
+      titleEl.textContent = "MAX SAYS 🔊";
+      titleEl.style.color = "";
+    }
+    captionText.textContent = currentTtsSpokenText;
+    caption.classList.remove("interrupted");
+    caption.classList.add("show", "speaking");
+  }
+
+  function updateLiveTtsWordProgress(ratio) {
+    if (!currentTtsSpokenText || !caption.classList.contains("speaking")) return;
+    const words = currentTtsSpokenText.split(/\s+/);
+    if (words.length <= 1) return;
+    const currentWordIdx = Math.min(words.length - 1, Math.max(0, Math.floor(ratio * words.length)));
+    const parts = words.map((w, i) => {
+      if (i === currentWordIdx) return `<span style="color:#00ffaa;font-weight:700;text-shadow:0 0 8px rgba(0,255,170,0.8);">${w}</span>`;
+      if (i < currentWordIdx) return `<span style="color:#94a3b8;">${w}</span>`;
+      return `<span style="color:#edf2fa;">${w}</span>`;
+    });
+    captionText.innerHTML = parts.join(' ');
+  }
+
+  function hideLiveTtsCaption(immediate = false) {
+    clearTimeout(liveTtsTimer);
+    caption.classList.remove("speaking");
+    if (immediate) {
+      clearTimeout(captionTimer);
+      caption.classList.remove("show");
+    } else {
+      clearTimeout(captionTimer);
+      liveTtsTimer = setTimeout(() => {
+        if (!talking && (typeof voiceEngine === 'undefined' || voiceEngine?.mode !== VoiceMode.SPEAKING)) {
+          caption.classList.remove("show");
+        }
+      }, 500);
+    }
+  }
+
   function setState(next, note="", meta={}){
     if(!stateData[next]) next = "neutral";
     previousState = state;
@@ -7365,7 +7418,7 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
       if (window.geminiLiveClient && (window.geminiLiveClient.connected || window.geminiLiveClient.connecting || window.geminiLiveClient.liveModeActive)) {
         return; // Gemini Live mode owns the microphone
       }
-      if (talking || aiRequestInFlight) return;
+      if (aiRequestInFlight) return;
 
       try {
         const session = ++this.session;
@@ -7396,11 +7449,25 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
         r.onspeechstart = () => {
           if (session !== this.session) return;
           this.lastSpeechAt = performance.now();
+          if (talking || this.mode === VoiceMode.SPEAKING) {
+            log('VOICE · sound/speech detected from user during speaking · muting Max');
+            if (typeof stopSpeakingAndListen === 'function') {
+              stopSpeakingAndListen('user-sound-detected');
+            }
+            return;
+          }
           if (this.mode === VoiceMode.STANDBY_WAKE) {
             log('VOICE · speech heard · listening for Max');
           } else {
             log('VOICE · speech detected');
             setVoiceStatus('VOICE DETECTED · TRANSCRIBING');
+          }
+        };
+
+        r.onsoundstart = () => {
+          if (session !== this.session) return;
+          if (talking || this.mode === VoiceMode.SPEAKING) {
+            this.lastSoundDuringSpeech = performance.now();
           }
         };
 
@@ -7670,7 +7737,7 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
       if (window.geminiLiveClient && (window.geminiLiveClient.connected || window.geminiLiveClient.connecting || window.geminiLiveClient.liveModeActive)) {
         return; // Gemini Live mode owns the microphone
       }
-      if (talking || aiRequestInFlight) return;
+      if (aiRequestInFlight) return;
 
       // Hot-restart in 15ms so there is ZERO dead window!
       this.scheduleRestart(15);
@@ -7681,7 +7748,7 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
       if (window.geminiLiveClient && (window.geminiLiveClient.connected || window.geminiLiveClient.connecting || window.geminiLiveClient.liveModeActive)) {
         return; // Gemini Live mode owns the microphone
       }
-      if (talking || aiRequestInFlight) return;
+      if (aiRequestInFlight) return;
       clearTimeout(this.restartTimer);
       this.restartTimer = setTimeout(() => {
         this.restartTimer = null;
@@ -7716,8 +7783,13 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
       clearTimeout(this.conversationTimeoutTimer);
       clearTimeout(this.thinkingTimeoutTimer);
 
-      if (newMode === VoiceMode.THINKING || newMode === VoiceMode.SPEAKING) {
+      if (newMode === VoiceMode.THINKING) {
         this.stopSession('mode:' + newMode);
+      } else if (newMode === VoiceMode.SPEAKING) {
+        // Keep listener armed and running so user sound / speech interruptions mute audio immediately
+        if (this.armed && !this.running && !this.starting) {
+          this.scheduleRestart(10);
+        }
       }
 
       if (newMode === VoiceMode.THINKING) {
@@ -7756,6 +7828,9 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
 
     onSpeechStarted() {
       this.setMode(VoiceMode.SPEAKING);
+      if (this.armed && !this.running && !this.starting) {
+        this.scheduleRestart(10);
+      }
     }
 
     onSpeechFinished() {
@@ -8112,7 +8187,11 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
               this.scheduleAudioPlayback(float32Data);
             }
             if (part.text) {
-              showCaption('MAX SAYS\n' + part.text, true);
+              if (typeof showLiveTtsCaption === 'function') {
+                showLiveTtsCaption(part.text);
+              } else {
+                showCaption('MAX SAYS\n' + part.text, true);
+              }
               devLog('LIVE SAYS', part.text);
               if (typeof robotActionEngine !== 'undefined' && robotActionEngine) {
                 const liveAction = robotActionEngine.inferActionFromText(part.text);
@@ -8244,6 +8323,7 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
           this.isPlaying = false;
           if (mic) mic.classList.remove('talking');
           setState('listening', 'Max listening live');
+          if (typeof hideLiveTtsCaption === 'function') hideLiveTtsCaption(false);
         }
       };
     }
@@ -8259,6 +8339,7 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
       this.isPlaying = false;
       const mic = document.getElementById('micBtn');
       if (mic) mic.classList.remove('talking');
+      if (typeof hideLiveTtsCaption === 'function') hideLiveTtsCaption(true);
       setState('listening', 'Max listening · user interrupted');
       showCaption('MAX LISTENING\nListening to you…', true);
       this.updateUI();
@@ -9395,13 +9476,13 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
   let roboAudioUrl=null;
   let roboSpeechToken=0;
 
-  function stopSpeakingAndListen(reason='barge-in'){
-    roboSpeechToken++;
+  function stopRoboAudioPlaybackOnly(reason='stopped'){
     if(roboAudio){
       try{
         roboAudio.onplay=null;
         roboAudio.onended=null;
         roboAudio.onerror=null;
+        roboAudio.ontimeupdate=null;
         roboAudio.pause();
         roboAudio.currentTime=0;
       }catch(_){}
@@ -9414,25 +9495,39 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
     if('speechSynthesis' in window){
       try{ speechSynthesis.cancel(); }catch(_){}
     }
+    if(window.geminiLiveClient && window.geminiLiveClient.isPlaying){
+      try{ window.geminiLiveClient.interrupt(); }catch(_){}
+    }
+  }
+
+  function stopSpeakingAndListen(reason='barge-in'){
+    roboSpeechToken++;
+    if(typeof hideLiveTtsCaption === 'function') hideLiveTtsCaption(true);
+    stopRoboAudioPlaybackOnly(reason);
     talking=false;
     const mic = document.getElementById('micBtn');
     if(mic) mic.classList.remove('talking');
-    log('TTS · user interrupted Max · muted speech (' + reason + ')');
+    log('TTS · user interrupted Max · muted live audio (' + reason + ')');
     
-    // Switch voice engine to ACTIVE_LISTENING so Max immediately captures the user's voice
+    // Switch voice engine to ACTIVE_LISTENING so Max immediately captures the user's speech
     if(typeof voiceEngine !== 'undefined' && voiceEngine) {
       voiceEngine.setMode(VoiceMode.ACTIVE_LISTENING);
     }
-    if(reason === 'barge-in' && typeof cozmoSoundEngine !== 'undefined'){
-      cozmoSoundEngine.playBargeIn();
+    if(typeof cozmoSoundEngine !== 'undefined'){
+      try { cozmoSoundEngine.playBargeIn(); } catch(_){}
     }
     setState('listening', 'user interrupted · Max listening', {silent: true});
-    showCaption('MAX LISTENING\nListening to you…', true);
+    setVoiceStatus('MAX LISTENING · listening to you…');
+    caption.classList.add('interrupted');
+    showCaption('MAX HEARS\nListening to you…', true);
+    if(typeof updateRealtimeHud === 'function') {
+      updateRealtimeHud('ROBO HEARD', 'MUTED · LISTENING', 'heard');
+    }
   }
   window.stopSpeakingAndListen = stopSpeakingAndListen;
 
   function stopRoboAudio(reason='stopped'){
-    stopSpeakingAndListen(reason);
+    stopRoboAudioPlaybackOnly(reason);
   }
 
   async function speakWithElevenLabs(text, token, languageHint='en'){
@@ -9524,9 +9619,15 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
       voiceEngine.onSpeechStarted();
       micBtn.classList.add('talking');
       setState('talking','talking · Max is speaking',{behavioral:true});
+      showLiveTtsCaption(clean);
       if(typeof updateRealtimeHud === 'function') {
-        updateRealtimeHud('SPEAKING', 'VOICE ACTIVE 🔊', 'speaking');
+        updateRealtimeHud('SPEAKING', `"${clean.slice(0, 24)}"`, 'speaking');
       }
+    };
+
+    audio.ontimeupdate=()=>{
+      if(token!==roboSpeechToken || !audio.duration) return;
+      updateLiveTtsWordProgress(audio.currentTime / audio.duration);
     };
 
     audio.onended=()=>{
@@ -9535,6 +9636,7 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
       ttsDiag('ElevenLabs speech end');
       talking=false;
       micBtn.classList.remove('talking');
+      hideLiveTtsCaption(false);
       wakeAfterSpeechEnd();
       if(roboAudio===audio) roboAudio=null;
       if(roboAudioUrl){
@@ -9549,6 +9651,7 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
       ttsDiag('ERROR · ElevenLabs audio playback failed');
       talking=false;
       micBtn.classList.remove('talking');
+      hideLiveTtsCaption(true);
       wakeAfterSpeechEnd();
       if(roboAudio===audio) roboAudio=null;
       if(roboAudioUrl){
@@ -9584,8 +9687,16 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
       voiceEngine.onSpeechStarted();
       micBtn.classList.add('talking');
       setState('talking','talking · Max is speaking',{behavioral:true});
+      showLiveTtsCaption(text);
       if(typeof updateRealtimeHud === 'function') {
-        updateRealtimeHud('SPEAKING', 'BROWSER VOICE 🔊', 'speaking');
+        updateRealtimeHud('SPEAKING', `"${text.slice(0, 24)}"`, 'speaking');
+      }
+    };
+
+    u.onboundary=(e)=>{
+      if(token!==roboSpeechToken) return;
+      if(e.name === 'word' && typeof e.charIndex === 'number' && text.length > 0){
+        updateLiveTtsWordProgress(e.charIndex / text.length);
       }
     };
 
@@ -9594,6 +9705,7 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
       log('TTS · browser fallback speech end');
       talking=false;
       micBtn.classList.remove('talking');
+      hideLiveTtsCaption(false);
       wakeAfterSpeechEnd();
     };
 
@@ -9602,6 +9714,7 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
       log('TTS ERROR · browser fallback · '+(e&&e.error?e.error:'unknown'));
       talking=false;
       micBtn.classList.remove('talking');
+      hideLiveTtsCaption(true);
       wakeAfterSpeechEnd();
       setState('curious','speech stopped');
     };
@@ -9612,9 +9725,9 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
         log('TTS · safety watchdog completed speech');
         talking = false;
         micBtn.classList.remove('talking');
+        hideLiveTtsCaption(true);
         wakeAfterSpeechEnd();
         setState('curious', 'curious · standing by');
-        hideCaption(1200);
       }
     }, safetyMs);
 
@@ -9627,16 +9740,16 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
     if(!clean) return;
 
     const ttsLanguage=languageHint || detectConversationLanguage(clean);
-    stopRoboAudio('new response');
+    stopRoboAudioPlaybackOnly('new response');
     if('speechSynthesis' in window) speechSynthesis.cancel();
 
-    const token=roboSpeechToken;
+    const token=++roboSpeechToken;
     log('TTS · ENGINE ENTRY · speak()');
     ttsDiag('ENGINE ENTRY · speak()');
     log('TTS · response queued · ElevenLabs');
     ttsDiag('response queued · ElevenLabs');
     console.info('[ROBO TTS DEBUG] speak() entered', clean);
-    showCaption('MAX SAYS\n'+clean,true);
+    showLiveTtsCaption(clean);
     if(typeof updateRealtimeHud === 'function') {
       updateRealtimeHud('SPEAKING', `"${clean.slice(0, 24)}"`, 'speaking');
     }
