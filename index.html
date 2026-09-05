@@ -564,6 +564,52 @@ button{font:inherit}
 .pill#livePill:hover{border-color:rgba(168,85,247,.7);background:rgba(168,85,247,.12)}
 .mic.talking{box-shadow:0 0 22px rgba(168,85,247,.8),0 0 40px rgba(0,229,255,.5)!important;border-color:#a855f7!important}
 
+/* Real-Time Top Screen Info HUD Strip */
+.realtimeHud{position:absolute;top:14px;left:0;right:0;display:flex;justify-content:center;align-items:center;z-index:38;pointer-events:none;padding:0 14px}
+.realtimeHudPill{display:inline-flex;align-items:center;gap:6px;max-width:min(94%,360px);padding:5px 12px;border-radius:999px;background:rgba(8,12,20,.88);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid rgba(0,229,255,.24);box-shadow:0 4px 18px rgba(0,0,0,.5),0 0 10px rgba(0,229,255,.08);font:700 8.5px/1.2 ui-monospace,SFMono-Regular,monospace;letter-spacing:.08em;color:#dffefa;transition:all .22s cubic-bezier(.16,1,.3,1);pointer-events:auto;cursor:pointer;user-select:none;-webkit-user-select:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.realtimeHudPill:hover{background:rgba(12,18,30,.95);transform:translateY(1px)}
+.realtimeHudDot{width:6px;height:6px;min-width:6px;border-radius:50%;background:#8f98aa;display:inline-block;transition:all .2s ease}
+.realtimeHudLabel{color:#fff;font-weight:800;letter-spacing:.1em}
+.realtimeHudSep{color:rgba(255,255,255,.3);margin:0 1px}
+.realtimeHudDetail{color:#8f98aa;font-weight:600;letter-spacing:.05em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:210px}
+
+/* Realtime HUD State Variants */
+.realtimeHudPill.hud-standby .realtimeHudDot{background:#64748b;box-shadow:none}
+.realtimeHudPill.hud-standby .realtimeHudLabel{color:#94a3b8}
+.realtimeHudPill.hud-standby{border-color:rgba(255,255,255,.12)}
+
+.realtimeHudPill.hud-listening .realtimeHudDot{background:#00e5ff;box-shadow:0 0 10px #00e5ff;animation:hudPulse .9s infinite alternate}
+.realtimeHudPill.hud-listening .realtimeHudLabel{color:#00e5ff}
+.realtimeHudPill.hud-listening{border-color:rgba(0,229,255,.45)}
+
+.realtimeHudPill.hud-heard .realtimeHudDot{background:#55c58c;box-shadow:0 0 12px #55c58c;animation:hudFlash .3s ease-out}
+.realtimeHudPill.hud-heard .realtimeHudLabel{color:#7ee59a}
+.realtimeHudPill.hud-heard .realtimeHudDetail{color:#fff;font-weight:700}
+.realtimeHudPill.hud-heard{border-color:rgba(85,197,140,.55)}
+
+.realtimeHudPill.hud-contacting .realtimeHudDot{background:#f0b45b;box-shadow:0 0 10px #f0b45b;animation:hudPulse .6s infinite alternate}
+.realtimeHudPill.hud-contacting .realtimeHudLabel{color:#f0b45b}
+.realtimeHudPill.hud-contacting{border-color:rgba(240,180,91,.45)}
+
+.realtimeHudPill.hud-brain .realtimeHudDot{background:#c084fc;box-shadow:0 0 12px #c084fc}
+.realtimeHudPill.hud-brain .realtimeHudLabel{color:#c084fc}
+.realtimeHudPill.hud-brain{border-color:rgba(192,132,252,.45)}
+
+.realtimeHudPill.hud-thinking .realtimeHudDot{background:#ff7654;box-shadow:0 0 12px #ff7654;animation:hudPulse .5s infinite alternate}
+.realtimeHudPill.hud-thinking .realtimeHudLabel{color:#ff886c}
+.realtimeHudPill.hud-thinking{border-color:rgba(255,118,84,.5)}
+
+.realtimeHudPill.hud-speaking .realtimeHudDot{background:#22c55e;box-shadow:0 0 12px #22c55e;animation:hudPulse .4s infinite alternate}
+.realtimeHudPill.hud-speaking .realtimeHudLabel{color:#4ade80}
+.realtimeHudPill.hud-speaking{border-color:rgba(34,197,94,.5)}
+
+.realtimeHudPill.hud-game .realtimeHudDot{background:#00e5ff;box-shadow:0 0 10px #00e5ff}
+.realtimeHudPill.hud-game .realtimeHudLabel{color:#00e5ff}
+.realtimeHudPill.hud-game{border-color:rgba(0,229,255,.4)}
+
+@keyframes hudPulse{0%{opacity:.45;transform:scale(.85)}100%{opacity:1;transform:scale(1.2)}}
+@keyframes hudFlash{0%{transform:scale(.7)}50%{transform:scale(1.35)}100%{transform:scale(1)}}
+
 </style>
 <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js" defer></script>
 </head>
@@ -575,6 +621,16 @@ button{font:inherit}
     <section class="screen">
       <!-- SCREEN 1: FACE (HOME) - Pure OLED Minimalist Companion -->
       <section class="screenSection active" id="screenFace">
+        <!-- TOP REAL-TIME STATUS HUD -->
+        <div id="realtimeHud" class="realtimeHud" aria-live="polite">
+          <div class="realtimeHudPill hud-standby" id="realtimeHudPill" title="Tap to open developer diagnostics">
+            <span class="realtimeHudDot" id="realtimeHudDot"></span>
+            <span class="realtimeHudLabel" id="realtimeHudLabel">STANDBY</span>
+            <span class="realtimeHudSep" id="realtimeHudSep">·</span>
+            <span class="realtimeHudDetail" id="realtimeHudDetail">SAY "MAX"</span>
+          </div>
+        </div>
+
         <section class="avatarZone">
           <div class="orbit">
             <div class="emojiFallback hidden" id="emojiFallback" style="display:none" aria-hidden="true"></div>
@@ -5522,6 +5578,53 @@ button{font:inherit}
     log('VOICE · '+text);
   }
 
+  /* Real-time top screen HUD indicator for exact pipeline states */
+  function updateRealtimeHud(label, detail = '', stageKey = 'standby') {
+    const pill = document.getElementById('realtimeHudPill');
+    const lbl = document.getElementById('realtimeHudLabel');
+    const sep = document.getElementById('realtimeHudSep');
+    const det = document.getElementById('realtimeHudDetail');
+
+    if (!pill || !lbl) return;
+
+    lbl.textContent = String(label || 'STANDBY').toUpperCase();
+
+    if (detail && String(detail).trim()) {
+      if (det) {
+        det.textContent = String(detail).trim();
+        det.style.display = 'inline';
+      }
+      if (sep) sep.style.display = 'inline';
+    } else {
+      if (det) det.style.display = 'none';
+      if (sep) sep.style.display = 'none';
+    }
+
+    pill.className = 'realtimeHudPill hud-' + (stageKey || 'standby');
+  }
+
+  function syncRealtimeHudFromStage(s) {
+    const stage = String(s || '').toUpperCase();
+    if (stage.includes('WAKE') || stage.includes('STANDBY')) {
+      updateRealtimeHud('STANDBY', 'SAY "MAX"', 'standby');
+    } else if (stage.includes('CAPTURING') || stage.includes('LISTENING')) {
+      updateRealtimeHud('LISTENING', 'CAPTURING SPEECH...', 'listening');
+    } else if (stage.includes('TRANSCRIBING') || stage.includes('FINAL TRANSCRIPT')) {
+      const tx = (typeof devTranscript !== 'undefined' && devTranscript) ? devTranscript.textContent : '';
+      updateRealtimeHud('ROBO HEARD', tx ? `"${tx.slice(0, 24)}"` : 'TRANSCRIBING...', 'heard');
+    } else if (stage.includes('AI REQUEST') || stage.includes('CONTACTING')) {
+      updateRealtimeHud('CONTACTING BRAIN', 'GEMINI CLOUD...', 'contacting');
+    } else if (stage.includes('THINKING') || stage.includes('INFERENCE')) {
+      updateRealtimeHud('THINKING', 'SYNTHESIZING...', 'thinking');
+    } else if (stage.includes('RESPONSE RECEIVED')) {
+      updateRealtimeHud('BRAIN (GEMINI)', 'RESPONSE READY', 'brain');
+    } else if (stage.includes('SPEAKING')) {
+      updateRealtimeHud('SPEAKING', 'VOICE ACTIVE 🔊', 'speaking');
+    } else if (stage.includes('FOLLOW-UP')) {
+      updateRealtimeHud('READY', 'AWAITING FOLLOW-UP', 'listening');
+    }
+  }
+
   /* =========================================================================
    * MODULE 9: COZMO PROCEDURAL SOUND FX ENGINE (PHASE B)
    * Real-time zero-asset Web Audio synthesis of authentic robot vocalizations
@@ -7356,6 +7459,9 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
           }
           this.transcriptBuffer = bargeInText;
           showCaption('MAX HEARS\n' + bargeInText, true);
+          if (typeof updateRealtimeHud === 'function') {
+            updateRealtimeHud('BARGE-IN', `"${bargeInText.slice(0, 24)}"`, 'heard');
+          }
         }
         return;
       }
@@ -7424,6 +7530,9 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
           this.setMode(VoiceMode.THINKING);
           setState('listening', 'Max heard: ' + parsed.command);
           showCaption('MAX HEARS\n' + parsed.command, true);
+          if (typeof updateRealtimeHud === 'function') {
+            updateRealtimeHud('ROBO HEARD', `"${parsed.command.slice(0, 26)}"`, 'heard');
+          }
           setTimeout(() => respond(parsed.command).catch(err => log('RESPOND ERROR · ' + (err?.message || err))), 30);
           return;
         }
@@ -7435,6 +7544,9 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
         setState('happy', 'Max acknowledged wake word');
         showCaption('MAX LISTENING\nListening to you…', true);
         setVoiceStatus('MAX LISTENING · speak your command…', 4500);
+        if (typeof updateRealtimeHud === 'function') {
+          updateRealtimeHud('ROBO HEARD "MAX"', 'LISTENING...', 'listening');
+        }
         return;
       }
 
@@ -7443,6 +7555,9 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
         showCaption('MAX HEARS\n' + spoken, true);
         if (devTranscript) devTranscript.textContent = spoken;
         if (devStage) devStage.textContent = bestFinalText ? 'FINAL TRANSCRIPT' : 'TRANSCRIBING…';
+        if (typeof updateRealtimeHud === 'function') {
+          updateRealtimeHud('ROBO HEARD', `"${spoken.slice(0, 26)}"`, 'heard');
+        }
 
         clearTimeout(this.silenceTimer);
 
@@ -7685,6 +7800,13 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
         else if (this.mode === VoiceMode.ACTIVE_CONVERSATION) devStage.textContent = 'AWAITING FOLLOW-UP';
         else if (this.mode === VoiceMode.THINKING) devStage.textContent = 'AI INFERENCE';
         else if (this.mode === VoiceMode.SPEAKING) devStage.textContent = 'MAX SPEAKING';
+      }
+      if (typeof updateRealtimeHud === 'function') {
+        if (this.mode === VoiceMode.STANDBY_WAKE) updateRealtimeHud('STANDBY', 'SAY "MAX"', 'standby');
+        else if (this.mode === VoiceMode.ACTIVE_LISTENING) updateRealtimeHud('LISTENING', 'CAPTURING SPEECH...', 'listening');
+        else if (this.mode === VoiceMode.ACTIVE_CONVERSATION) updateRealtimeHud('READY', 'AWAITING SPEECH', 'listening');
+        else if (this.mode === VoiceMode.THINKING) updateRealtimeHud('THINKING', 'AI INFERENCE...', 'thinking');
+        else if (this.mode === VoiceMode.SPEAKING) updateRealtimeHud('SPEAKING', 'MAX VOICE ACTIVE 🔊', 'speaking');
       }
       const vadEl = document.getElementById('devVadStatus');
       if (vadEl && this.mode === VoiceMode.STANDBY_WAKE) {
@@ -9073,6 +9195,9 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
     if(devStage) devStage.textContent='AI REQUEST ACTIVE';
     setVoiceStatus('MAX THINKING · contacting AI brain…');
     setState('thinking','thinking · Max is processing',{behavioral:true});
+    if(typeof updateRealtimeHud === 'function') {
+      updateRealtimeHud('CONTACTING BRAIN', 'GEMINI CLOUD...', 'contacting');
+    }
 
     const requestCameraSession=cameraSession;
     let requestUsedVision=false;
@@ -9195,6 +9320,9 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
       }
 
       devLog('VISION','sending request',{attached:Boolean(visionImage),session:requestCameraSession});
+      if(typeof updateRealtimeHud === 'function') {
+        updateRealtimeHud('THINKING', 'SYNTHESIZING REASONING...', 'thinking');
+      }
 
       const data = await callRoboBrain(
         requestMessages,
@@ -9211,6 +9339,9 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
       if(data?.visionData && visionImage && cameraEnabled && requestCameraSession===cameraSession) renderVisionResult(data.visionData);
       else if(!visionImage || !cameraEnabled){ clearVisionOverlay(); latestVision=null; }
       const reply=String(data.text).trim();
+      if(typeof updateRealtimeHud === 'function') {
+        updateRealtimeHud('BRAIN (GEMINI)', 'RESPONSE READY', 'brain');
+      }
       if(data?.action && typeof robotActionEngine !== 'undefined') {
         robotActionEngine.executeAction(data.action);
       } else if (typeof robotActionEngine !== 'undefined') {
@@ -9226,6 +9357,9 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
       setState(emotion,emotion+' · AI response',{intensity:emotionResult.intensity,confidence:emotionResult.confidence});
       speak(reply,languageHint);
     }catch(err){
+      if(typeof updateRealtimeHud === 'function') {
+        updateRealtimeHud('LOCAL BRAIN', 'FALLBACK ACTIVE', 'standby');
+      }
       // v2.12 remains usable before an API key is installed.
       const fallback=localFallback(clean);
       extractImplicitMemories(clean);
@@ -9390,6 +9524,9 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
       voiceEngine.onSpeechStarted();
       micBtn.classList.add('talking');
       setState('talking','talking · Max is speaking',{behavioral:true});
+      if(typeof updateRealtimeHud === 'function') {
+        updateRealtimeHud('SPEAKING', 'VOICE ACTIVE 🔊', 'speaking');
+      }
     };
 
     audio.onended=()=>{
@@ -9447,6 +9584,9 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
       voiceEngine.onSpeechStarted();
       micBtn.classList.add('talking');
       setState('talking','talking · Max is speaking',{behavioral:true});
+      if(typeof updateRealtimeHud === 'function') {
+        updateRealtimeHud('SPEAKING', 'BROWSER VOICE 🔊', 'speaking');
+      }
     };
 
     u.onend=()=>{
@@ -9497,6 +9637,9 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
     ttsDiag('response queued · ElevenLabs');
     console.info('[ROBO TTS DEBUG] speak() entered', clean);
     showCaption('MAX SAYS\n'+clean,true);
+    if(typeof updateRealtimeHud === 'function') {
+      updateRealtimeHud('SPEAKING', `"${clean.slice(0, 24)}"`, 'speaking');
+    }
 
     try{
       const played=elevenLabsQuotaExhausted ? false : await speakWithElevenLabs(clean,token,ttsLanguage);
@@ -9570,7 +9713,17 @@ function devLog(type,msg,data){
   if(devLogLines.length>500)devLogLines.shift();
   if(devLogs){devLogs.textContent=devLogLines.join("\n");devLogs.scrollTop=devLogs.scrollHeight}
 }
-function devStageSet(s){if(devStage)devStage.textContent=s;devLog("STAGE",s)}
+function devStageSet(s){
+  if(devStage) devStage.textContent=s;
+  devLog("STAGE",s);
+  if(typeof syncRealtimeHudFromStage === 'function') syncRealtimeHudFromStage(s);
+}
+$('#realtimeHudPill')?.addEventListener('click', () => {
+  if(typeof cozmoSoundEngine !== 'undefined' && cozmoSoundEngine) cozmoSoundEngine.playDing();
+  if(typeof switchScreen === 'function') {
+    switchScreen(currentScreen === 'dev' ? 'face' : 'dev');
+  }
+});
 if(devBrowser)devBrowser.textContent=navigator.userAgent.includes("Chrome")?"Chrome":"Other";
 if(devAI)devAI.textContent="CHECKING · PROVIDER ADAPTER";
 if(devStt)devStt.textContent=(window.SpeechRecognition||window.webkitSpeechRecognition)?"SUPPORTED":"UNSUPPORTED";
@@ -11472,6 +11625,9 @@ function hookRecognitionDiagnostics(r){
       this.handState = { x: 0, y: 0, recoilProgress: 0, t: 0, slapCount: 0 };
       this.sound.playDing();
       showCaption('MAX GESTURE\n' + type.toUpperCase().replace('_', ' '), true);
+      if (typeof updateRealtimeHud === 'function') {
+        updateRealtimeHud('ROBOTIC GESTURE', type.toUpperCase().replace('_', ' '), 'gesture');
+      }
 
       // Auto dismiss hands after display duration (longer fallback for interactive hands)
       const autoDismissTime = (type === 'high_five' || type === 'fist_bump') ? 9000 : 4200;
@@ -11489,6 +11645,9 @@ function hookRecognitionDiagnostics(r){
       }
       this.activeHand = null;
       hideCaption();
+      if (typeof updateRealtimeHud === 'function') {
+        updateRealtimeHud('READY', 'FACE ACTIVE', 'standby');
+      }
     }
 
     // ==========================================
@@ -11498,6 +11657,9 @@ function hookRecognitionDiagnostics(r){
       this.stopGame();
       this.activeGame = gameName;
       this.sound.playDing();
+      if (typeof updateRealtimeHud === 'function') {
+        updateRealtimeHud('MINI-GAME', gameName.toUpperCase().replace('_', ' '), 'game');
+      }
 
       if (gameName === 'quick_tap') {
         this.gameState = {
@@ -11564,6 +11726,9 @@ function hookRecognitionDiagnostics(r){
       this.activeGame = null;
       this.gameState = {};
       hideCaption();
+      if (typeof updateRealtimeHud === 'function') {
+        updateRealtimeHud('READY', 'FACE ACTIVE', 'standby');
+      }
     }
 
     playRPSChoice(playerChoice) {
