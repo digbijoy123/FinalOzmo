@@ -803,6 +803,31 @@ export default async function handler(
     const customGeminiKey = req.headers['x-gemini-key'];
     const customElevenKey = req.headers['x-elevenlabs-key'];
 
+    let elevenSubscription = null;
+    const effectiveElevenKey = (customElevenKey || process.env.ELEVENLABS_API_KEY || '').trim();
+    if (effectiveElevenKey && (effectiveElevenKey.startsWith('sk_') || effectiveElevenKey.length === 32)) {
+      try {
+        const subRes = await fetch('https://api.elevenlabs.io/v1/user/subscription', {
+          headers: { 'xi-api-key': effectiveElevenKey },
+          signal: AbortSignal.timeout(3500),
+        });
+        if (subRes.ok) {
+          const subData = await subRes.json();
+          const characterCount = subData.character_count || 0;
+          const characterLimit = subData.character_limit || 0;
+          elevenSubscription = {
+            tier: subData.tier || 'free',
+            characterCount,
+            characterLimit,
+            remaining: Math.max(0, characterLimit - characterCount),
+            isExhausted: characterCount >= characterLimit,
+          };
+        } else if (subRes.status === 401) {
+          elevenSubscription = { error: 'Invalid API key or unauthorized' };
+        }
+      } catch (_) {}
+    }
+
     const configured =
       providerName === 'gemini'
         ? Boolean(
@@ -834,6 +859,8 @@ export default async function handler(
           providerName === 'gemini',
 
         elevenLabs: {
+          subscription:
+            elevenSubscription,
           configured:
             Boolean(
               (process.env.ELEVENLABS_API_KEY &&

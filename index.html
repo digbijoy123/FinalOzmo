@@ -842,9 +842,11 @@ button{font:inherit}
                     <button type="button" class="voicePresetBtn" data-voice="ErXwobaYiN019PkySvjV" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.18);border-radius:4px;color:#fff;font-size:9px;padding:3px 7px;cursor:pointer;">Antoni</button>
                     <button type="button" class="voicePresetBtn" data-voice="TxGEqnHWrfWFTfGW9XjX" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.18);border-radius:4px;color:#fff;font-size:9px;padding:3px 7px;cursor:pointer;">Josh</button>
                     <button type="button" class="voicePresetBtn" data-voice="AZnzlk1XvdvUeBnXmlld" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.18);border-radius:4px;color:#fff;font-size:9px;padding:3px 7px;cursor:pointer;">Domi</button>
-                  </div>
                   <div class="metricSub" style="margin-top:4px;"><b>Free tier:</b> use buttons above or your own VoiceLab clone. (Community Library voices require paid subscription).</div>
-                </div>
+                  <div id="elevenQuotaBadge" style="margin-top:8px;font-size:10px;padding:6px 10px;border-radius:6px;background:rgba(255,255,255,.05);display:none;line-height:1.4;"></div>
+                  <div style="margin-top:8px;">
+                    <button type="button" id="testTtsBtn" class="devAction" style="background:rgba(0,229,255,.12);border-color:var(--cyan);color:var(--cyan);font-weight:700;font-size:10px;">🔊 TEST ELEVENLABS VOICE</button>
+                  </div>
               </div>
             </section>
 
@@ -9405,6 +9407,25 @@ async function refreshAIProviderDiagnostic(){
     if(!el.configured && !localStorage.getItem('robo_elevenlabs_api_key')){
       elevenLabsQuotaExhausted = true;
     }
+    const qBadge = $('#elevenQuotaBadge');
+    if (qBadge) {
+      if (el.subscription) {
+        qBadge.style.display = 'block';
+        if (el.subscription.isExhausted || el.subscription.remaining === 0) {
+          elevenLabsQuotaExhausted = true;
+          qBadge.innerHTML = `<span style="color:var(--coral);font-weight:700;">⚠️ ElevenLabs Quota: 0 / ${el.subscription.characterLimit.toLocaleString()} credits remaining (EXHAUSTED). Free monthly limit reached! Chrome browser voice is active until credits reset.</span>`;
+          devLog('TTS', 'ElevenLabs quota exhausted: 0 credits remaining on account.');
+        } else {
+          elevenLabsQuotaExhausted = false;
+          qBadge.innerHTML = `<span style="color:var(--green);font-weight:700;">✓ ElevenLabs Credits: ${el.subscription.remaining.toLocaleString()} / ${el.subscription.characterLimit.toLocaleString()} remaining (${el.subscription.tier} tier)</span>`;
+        }
+      } else if (el.keyFormatError) {
+        qBadge.style.display = 'block';
+        qBadge.innerHTML = `<span style="color:var(--coral);font-weight:700;">⚠️ ${el.keyFormatError}</span>`;
+      } else {
+        qBadge.style.display = 'none';
+      }
+    }
   }catch(e){
     if(devAI)devAI.textContent='AI ERROR · ROUTE UNREACHABLE';
     devLog('AI ERROR','diagnostic request failed · '+(e?.message||e?.name||'unknown'));
@@ -10962,6 +10983,45 @@ function hookRecognitionDiagnostics(r){
         devLog('TTS', 'Selected voice preset: ' + btn.textContent.trim() + ' (' + vId + ')');
       }
     });
+  });
+
+  $('#testTtsBtn')?.addEventListener('click', async () => {
+    const btn = $('#testTtsBtn');
+    if (!btn) return;
+    const origText = btn.textContent;
+    btn.textContent = '🔊 TESTING ELEVENLABS…';
+    btn.disabled = true;
+    try {
+      elevenLabsQuotaExhausted = false;
+      showCaption('Testing ElevenLabs Voice…', true);
+      const played = await speakWithElevenLabs('Hello Digvijay! Max custom voice is online.', ++roboSpeechToken, 'en');
+      if (played) {
+        btn.textContent = '✓ VOICE WORKING!';
+        showCaption('✓ ElevenLabs Voice Played Successfully!', true);
+      } else {
+        btn.textContent = '❌ PLAYBACK FAILED';
+        showCaption('❌ ElevenLabs Voice Playback Failed', true);
+      }
+    } catch (err) {
+      const msg = err?.message || 'Unknown error';
+      if (/exceeds your quota|0 credits remaining/i.test(msg)) {
+        btn.textContent = '❌ QUOTA EXHAUSTED (0 CREDITS)';
+        showCaption('❌ ElevenLabs Quota Exhausted:\n0 credits remaining on your ElevenLabs account!', true);
+      } else if (/library voices/i.test(msg)) {
+        btn.textContent = '❌ COMMUNITY VOICE RESTRICTED';
+        showCaption('❌ Community voice restricted on free tier. Tap Rachel or Adam above!', true);
+      } else {
+        btn.textContent = '❌ ' + (err.httpStatus ? `HTTP ${err.httpStatus}` : 'FAILED');
+        showCaption(`❌ ElevenLabs Test Failed:\n${msg}`, true);
+      }
+      devLog('TTS ERROR', 'Manual voice test failed: ' + msg);
+    } finally {
+      setTimeout(() => {
+        btn.textContent = origText;
+        btn.disabled = false;
+        hideCaption(4500);
+      }, 4000);
+    }
   });
 
   /* ---------- BLE / ESP32 scaffold ---------- */
