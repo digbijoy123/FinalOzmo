@@ -7461,14 +7461,6 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
           if (session !== this.session) return;
           this.lastSpeechAt = performance.now();
           if (talking || this.mode === VoiceMode.SPEAKING) {
-            // Sound/speech detected from user while robot is speaking: mute and listen!
-            if (performance.now() - (this.speechStartedAt || 0) > 500) {
-              log('VOICE · sound/speech detected from user during speaking · muting Max');
-              if (typeof stopSpeakingAndListen === 'function') {
-                stopSpeakingAndListen('user-sound-detected');
-              }
-              return;
-            }
             log('VOICE · speech/sound active during playback');
             return;
           }
@@ -7535,54 +7527,92 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
         }
         if (bargeInText.length >= 1) {
           const normalizedBarge = bargeInText.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
-          const normalizedSpoken = (window.__currentSpokenText || currentTtsSpokenText || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
+          const normalizedSpoken = (window.__currentSpokenText || window.__lastSpokenText || currentTtsSpokenText || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
           const isStopOrWake = /^(max|stop|wait|shut up|hold on|cancel|quiet|pause|listen|no|hey max|yo)\b/i.test(normalizedBarge);
-          const isSelfEcho = !isStopOrWake && normalizedSpoken && normalizedSpoken.includes(normalizedBarge) && (performance.now() - (this.speechStartedAt || 0) < 2200);
-
-          if (!isSelfEcho) {
-            this.bargeInCount++;
-            const bCountEl = document.getElementById('devBargeInCount');
-            if (bCountEl) bCountEl.textContent = this.bargeInCount;
-            if (typeof stopSpeakingAndListen === 'function') {
-              stopSpeakingAndListen('voice-barge-in: ' + bargeInText);
+          
+          let isSelfEcho = false;
+          if (!isStopOrWake && normalizedSpoken) {
+            const bargeWords = normalizedBarge.split(/\s+/).filter(w => w.length > 2);
+            const matchingWords = bargeWords.filter(w => normalizedSpoken.includes(w));
+            const matchRatio = bargeWords.length > 0 ? matchingWords.length / bargeWords.length : 0;
+            if (normalizedSpoken.includes(normalizedBarge) || matchRatio >= 0.5) {
+              isSelfEcho = true;
             }
-            this.transcriptBuffer = bargeInText;
-            showCaption('MAX HEARS\n' + bargeInText, true);
-            if (typeof updateRealtimeHud === 'function') {
-              updateRealtimeHud('BARGE-IN', `"${bargeInText.slice(0, 24)}"`, 'heard');
-            }
-
-            // Immediately schedule adaptive VAD debounce so user speech during interruption is answered!
-            clearTimeout(this.silenceTimer);
-            const debounceMs = isStopOrWake ? 600 : (/\?$/.test(bargeInText.trim()) ? 700 : 950);
-            this.silenceTimer = setTimeout(() => {
-              if (this.transcriptBuffer) {
-                const query = this.transcriptBuffer.trim();
-                this.transcriptBuffer = '';
-                if (query.length >= 2) {
-                  // If user just said a pure stop/cancel command
-                  if (/^(stop|wait|shut up|cancel|quiet|pause|hold on)$/i.test(query.toLowerCase().replace(/[^a-z\s]/g, '').trim())) {
-                    log('VOICE · stop command acknowledged · standing by');
-                    setState('happy', 'Max stopped · standing by');
-                    setVoiceStatus('MAX READY · say “Max” to talk');
-                    this.setMode(VoiceMode.STANDBY_WAKE);
-                    return;
-                  }
-                  this.utteranceCount++;
-                  log('VOICE · barge-in sentence complete · dispatching: ' + query);
-                  this.stopSession('dispatched barge-in query');
-                  this.setMode(VoiceMode.THINKING);
-                  setState('thinking', 'thinking · processing your words');
-                  respond(query).catch(err => log('RESPOND ERROR · ' + (err?.message || err)));
-                }
-              }
-            }, debounceMs);
           }
+
+          if (isSelfEcho) {
+            log('VOICE · discarded live playback self-echo · ' + bargeInText);
+            return;
+          }
+
+          this.bargeInCount++;
+          const bCountEl = document.getElementById('devBargeInCount');
+          if (bCountEl) bCountEl.textContent = this.bargeInCount;
+          if (typeof stopSpeakingAndListen === 'function') {
+            stopSpeakingAndListen('voice-barge-in: ' + bargeInText);
+          }
+          this.transcriptBuffer = bargeInText;
+          showCaption('MAX HEARS\n' + bargeInText, true);
+          if (typeof updateRealtimeHud === 'function') {
+            updateRealtimeHud('BARGE-IN', `"${bargeInText.slice(0, 24)}"`, 'heard');
+          }
+
+          // Immediately schedule adaptive VAD debounce so user speech during interruption is answered!
+          clearTimeout(this.silenceTimer);
+          const debounceMs = isStopOrWake ? 600 : (/\?$/.test(bargeInText.trim()) ? 700 : 950);
+          this.silenceTimer = setTimeout(() => {
+            if (this.transcriptBuffer) {
+              const query = this.transcriptBuffer.trim();
+              this.transcriptBuffer = '';
+              if (query.length >= 2) {
+                // If user just said a pure stop/cancel command
+                if (/^(stop|wait|shut up|cancel|quiet|pause|hold on)$/i.test(query.toLowerCase().replace(/[^a-z\s]/g, '').trim())) {
+                  log('VOICE · stop command acknowledged · standing by');
+                  setState('happy', 'Max stopped · standing by');
+                  setVoiceStatus('MAX READY · say “Max” to talk');
+                  this.setMode(VoiceMode.STANDBY_WAKE);
+                  return;
+                }
+                this.utteranceCount++;
+                log('VOICE · barge-in sentence complete · dispatching: ' + query);
+                this.stopSession('dispatched barge-in query');
+                this.setMode(VoiceMode.THINKING);
+                setState('thinking', 'thinking · processing your words');
+                respond(query).catch(err => log('RESPOND ERROR · ' + (err?.message || err)));
+              }
+            }
+          }, debounceMs);
         }
         return;
       }
 
-      if (performance.now() - this.lastSpokenEndedAt < 250) {
+      // Guard against trailing echo from the speaker right after speech ends
+      const timeSinceSpeech = performance.now() - (this.lastSpokenEndedAt || 0);
+      if (timeSinceSpeech < 2200) {
+        const normLast = String(window.__lastSpokenText || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
+        if (normLast) {
+          let candidateText = '';
+          for (let i = e.resultIndex; i < e.results.length; i++) {
+            const res = e.results[i];
+            if (res && res[0] && res[0].transcript) {
+              candidateText += (candidateText ? ' ' : '') + res[0].transcript.trim();
+            }
+          }
+          const normCandidate = candidateText.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
+          const isStopOrWake = /^(max|stop|wait|shut up|hold on|cancel|quiet|pause|listen|no|hey max|yo)\b/i.test(normCandidate);
+          if (!isStopOrWake && normCandidate) {
+            const words = normCandidate.split(/\s+/).filter(w => w.length > 2);
+            const matchingWords = words.filter(w => normLast.includes(w));
+            const matchRatio = words.length > 0 ? matchingWords.length / words.length : 0;
+            if (normLast.includes(normCandidate) || matchRatio >= 0.4) {
+              log('VOICE · discarded post-speech self-echo · ' + candidateText);
+              return;
+            }
+          }
+        }
+      }
+
+      if (timeSinceSpeech < 300) {
         return;
       }
 
@@ -7892,14 +7922,19 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
 
     onSpeechFinished() {
       this.lastSpokenEndedAt = performance.now();
+      window.__lastSpokenEndedAt = this.lastSpokenEndedAt;
+      window.__lastSpokenText = window.__currentSpokenText || window.__lastSpokenText || '';
+      window.__currentSpokenText = '';
       // Instantly open continuous conversational follow-up window (Gemini Live style)
       this.setMode(VoiceMode.ACTIVE_CONVERSATION);
       setVoiceStatus('MAX LISTENING · speak naturally…');
       setState('listening', 'Max listening · continuous dialogue…');
       showCaption('MAX LISTENING\nSpeak naturally — Max is listening…', true);
 
-      // Schedule fresh recognition session with clean buffers
-      this.scheduleRestart(25);
+      // Cleanly abort the old recognition session that was active during speaker output
+      // so all internal Google Speech Recognition audio buffers are flushed!
+      this.stopSession('fresh-session-after-speech');
+      this.scheduleRestart(80);
     }
 
     triggerManualListening() {
@@ -9561,6 +9596,8 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
 
   function stopSpeakingAndListen(reason='barge-in'){
     roboSpeechToken++;
+    window.__lastSpokenText = window.__currentSpokenText || window.__lastSpokenText || '';
+    window.__currentSpokenText = '';
     if(typeof hideLiveTtsCaption === 'function') hideLiveTtsCaption(true);
     stopRoboAudioPlaybackOnly(reason);
     talking=false;

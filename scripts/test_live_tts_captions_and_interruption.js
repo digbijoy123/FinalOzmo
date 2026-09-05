@@ -23,10 +23,10 @@ assert.ok(html.includes('function stopSpeakingAndListen('), 'Missing stopSpeakin
 assert.ok(html.includes('stopRoboAudioPlaybackOnly(\'new response\')'), 'speak() must use stopRoboAudioPlaybackOnly, not barge-in');
 console.log('PASS: Clean separation between stopRoboAudioPlaybackOnly and stopSpeakingAndListen verified.');
 
-// Test 4: Verify UnifiedVoiceEngine allows recognition and sound detection during SPEAKING
+// Test 4: Verify UnifiedVoiceEngine allows recognition and sound detection during SPEAKING without self-echo
 assert.ok(html.includes('if (talking || this.mode === VoiceMode.SPEAKING)'), 'VoiceEngine must detect speech/sound while speaking');
-assert.ok(html.includes('stopSpeakingAndListen(\'user-sound-detected\')'), 'VoiceEngine onspeechstart must mute Max and listen upon user sound');
 assert.ok(html.includes('stopSpeakingAndListen(\'voice-barge-in: \' + bargeInText)'), 'VoiceEngine handleResults must mute Max and listen upon user barge-in words');
+assert.ok(html.includes('discarded live playback self-echo') && html.includes('discarded post-speech self-echo'), 'VoiceEngine must filter out self-echo during and after speech');
 
 // Verify start() and scheduleRestart() do not abort just because talking === true
 const voiceEngineSection = html.slice(html.indexOf('class UnifiedVoiceEngine'), html.indexOf('const voiceEngine = new UnifiedVoiceEngine()'));
