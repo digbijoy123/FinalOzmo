@@ -116,7 +116,11 @@ state — never leave the app broken between phases.
   - LLM background extraction: automatically detect and store meaningful facts, preferences, and commitments from natural conversation without requiring manual "remember that..." commands.
   - Conversational recall & proactive check-ins ("How did your exam go? You mentioned it yesterday!").
   - Privacy and memory control: voice commands to inspect, edit, or delete memories ("What do you know about me?", "Forget my birthday").
-- **Exit criteria**: Multi-person profiles automatically persist, update from conversations, and trigger personalized greetings and episodic memory retrieval across sessions.
+- **Dynamic Real-Time Personality Engine (Tracked in Phase E)**:
+  - Direct voice-driven tuning of humor, sass/attitude, verbosity, and custom directives.
+  - Cybernetic Dev Screen live tuning sliders with bidirectional voice sync.
+  - Fast iteration integration with Google Antigravity slash commands (`/learn`, `/grill-me`, `/goal`).
+- **Exit criteria**: Multi-person profiles automatically persist, update from conversations, and trigger personalized greetings and episodic memory retrieval across sessions; personality traits update dynamically via voice and Dev sliders.
 
 ## Phase 8 — Full-System Deep Code Audit, Dead Code Elimination & Performance Optimization
 
