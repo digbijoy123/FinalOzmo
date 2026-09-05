@@ -822,7 +822,7 @@ button{font:inherit}
                 <div class="devTitle" style="margin-bottom:0;">CLOUD AI & API KEYS CONFIGURATION</div>
                 <button class="devAction" id="saveApiKeysBtn" style="background:rgba(0,229,255,.18);border-color:var(--cyan);color:var(--cyan);font-weight:700;">SAVE & RECONNECT AI</button>
               </div>
-              <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;">
+              <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;">
                 <div>
                   <span class="metricLabel">GEMINI API KEY (Google AI Studio)</span>
                   <input type="password" id="geminiKeyInput" placeholder="AIzaSy... (Paste key here)" style="width:100%;box-sizing:border-box;background:#0d111a;border:1px solid rgba(255,255,255,.14);border-radius:8px;color:#fff;padding:9px 12px;font-size:11px;outline:none;font-family:monospace;margin-top:4px;" />
@@ -832,6 +832,11 @@ button{font:inherit}
                   <span class="metricLabel">ELEVENLABS API KEY (Optional High-Fidelity Voice)</span>
                   <input type="password" id="elevenKeyInput" placeholder="xi-api-key... (Optional)" style="width:100%;box-sizing:border-box;background:#0d111a;border:1px solid rgba(255,255,255,.14);border-radius:8px;color:#fff;padding:9px 12px;font-size:11px;outline:none;font-family:monospace;margin-top:4px;" />
                   <div class="metricSub">Optional high-fidelity voices (browser TTS is active by default).</div>
+                </div>
+                <div>
+                  <span class="metricLabel">ELEVENLABS VOICE ID (Custom Cloned Voice)</span>
+                  <input type="text" id="elevenVoiceInput" placeholder="e.g. 21m00Tcm4TlvDq8ikWAM or cloned Voice ID" style="width:100%;box-sizing:border-box;background:#0d111a;border:1px solid rgba(255,255,255,.14);border-radius:8px;color:#fff;padding:9px 12px;font-size:11px;outline:none;font-family:monospace;margin-top:4px;" />
+                  <div class="metricSub">Custom voice clone ID from ElevenLabs VoiceLab (or leave blank for default Rachel).</div>
                 </div>
               </div>
             </section>
@@ -9065,6 +9070,8 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
     const headers = { 'Content-Type': 'application/json' };
     const savedElevenKey = localStorage.getItem('robo_elevenlabs_api_key');
     if(savedElevenKey) headers['x-elevenlabs-key'] = savedElevenKey;
+    const savedElevenVoice = localStorage.getItem('robo_elevenlabs_voice_id');
+    if(savedElevenVoice) headers['x-elevenlabs-voice-id'] = savedElevenVoice;
 
     const response=await fetch('/api/robo',{
       method:'POST',
@@ -9325,6 +9332,8 @@ async function refreshAIProviderDiagnostic(){
     if(savedGeminiKey) headers['x-gemini-key'] = savedGeminiKey;
     const savedElevenKey = localStorage.getItem('robo_elevenlabs_api_key');
     if(savedElevenKey) headers['x-elevenlabs-key'] = savedElevenKey;
+    const savedElevenVoice = localStorage.getItem('robo_elevenlabs_voice_id');
+    if(savedElevenVoice) headers['x-elevenlabs-voice-id'] = savedElevenVoice;
 
     const res=await fetch('/api/robo',{method:'GET',cache:'no-store',headers});
     const data=await res.json().catch(()=>({}));
@@ -10832,16 +10841,21 @@ function hookRecognitionDiagnostics(r){
   // Wire API Keys in Dev Screen
   const geminiInput = $('#geminiKeyInput');
   const elevenInput = $('#elevenKeyInput');
+  const elevenVoiceInput = $('#elevenVoiceInput');
   if (geminiInput) geminiInput.value = localStorage.getItem('robo_gemini_api_key') || '';
   if (elevenInput) elevenInput.value = localStorage.getItem('robo_elevenlabs_api_key') || '';
+  if (elevenVoiceInput) elevenVoiceInput.value = localStorage.getItem('robo_elevenlabs_voice_id') || '';
 
   $('#saveApiKeysBtn')?.addEventListener('click', async () => {
     const gKey = geminiInput?.value?.trim() || '';
     const eKey = elevenInput?.value?.trim() || '';
+    const eVoice = elevenVoiceInput?.value?.trim() || '';
     if (gKey) localStorage.setItem('robo_gemini_api_key', gKey);
     else localStorage.removeItem('robo_gemini_api_key');
     if (eKey) localStorage.setItem('robo_elevenlabs_api_key', eKey);
     else localStorage.removeItem('robo_elevenlabs_api_key');
+    if (eVoice) localStorage.setItem('robo_elevenlabs_voice_id', eVoice);
+    else localStorage.removeItem('robo_elevenlabs_voice_id');
 
     showCaption('API Keys Saved! Reconnecting AI brain…', true);
     hideCaption(3000);

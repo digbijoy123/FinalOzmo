@@ -827,7 +827,9 @@ export default async function handler(
           voiceConfigured:
             Boolean(
               process.env
-                .ELEVENLABS_VOICE_ID || customElevenKey,
+                .ELEVENLABS_VOICE_ID ||
+                req.headers['x-elevenlabs-voice-id'] ||
+                customElevenKey,
             ),
 
           model:
