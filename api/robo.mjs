@@ -32,7 +32,19 @@ const SYSTEM_PROMPT =
   'For counting questions such as fingers, people, objects, or items, inspect the image and give the best visible count. ' +
   'If no camera image is attached, return an empty objects array and clearly say that no camera image was provided.';
 
-function buildSystemPrompt(languageHint='en'){
+function buildSystemPrompt(languageHint='en', personality=null){
+  let prompt = SYSTEM_PROMPT;
+  if(personality && typeof personality === 'object'){
+    const humor = Number.isFinite(Number(personality.humor)) ? Math.round(Number(personality.humor) * 100) : 85;
+    const attitude = personality.attitude ? String(personality.attitude) : 'witty';
+    const verbosity = personality.verbosity ? String(personality.verbosity) : 'concise';
+    prompt += ` [REAL-TIME PERSONALITY TUNING: Humor is ${humor}%. Attitude is ${attitude}. Verbosity preference is ${verbosity}.`;
+    if(Array.isArray(personality.customDirectives) && personality.customDirectives.length){
+      prompt += ` Live rules: ${personality.customDirectives.join('; ')}.`;
+    }
+    prompt += ']';
+  }
+
   const languageInstruction =
     languageHint === 'hi'
       ? 'The latest user message is Hindi or Hinglish. Reply in natural Hindi or Hinglish, preserving the user\'s mix of Hindi and English where appropriate. Do not switch to English unless the user clearly asks in English.'
@@ -40,7 +52,7 @@ function buildSystemPrompt(languageHint='en'){
         ? 'The latest user message is Bengali. Reply naturally in Bengali unless the user clearly asks in another language.'
         : 'Reply in natural English unless the latest user message clearly uses another supported language.';
 
-  return SYSTEM_PROMPT + ' ' + languageInstruction;
+  return prompt + ' ' + languageInstruction;
 }
 
 const VISION_SCHEMA = {
@@ -303,6 +315,7 @@ const PROVIDERS = {
       cameraEnabled = false,
       cameraSession = null,
       languageHint = 'en',
+      personality = null,
       apiKey = null,
     }) {
       const key =
@@ -410,6 +423,7 @@ const PROVIDERS = {
                     text:
                       buildSystemPrompt(
                         languageHint,
+                        personality,
                       ),
                   },
                 ],
@@ -1087,6 +1101,11 @@ export default async function handler(
         cameraSession,
 
         languageHint,
+
+        personality:
+          body.personality && typeof body.personality === 'object'
+            ? body.personality
+            : null,
 
         apiKey:
           req.headers['x-gemini-key'] || null,

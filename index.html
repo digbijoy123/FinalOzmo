@@ -904,9 +904,38 @@ button{font:inherit}
               <div class="devRow"><span>Active identity</span><b id="devMemoryIdentity">UNKNOWN</b></div>
               <div class="devRow"><span>Active memories</span><b id="devMemoryCount">0</b></div>
               <div class="devRow"><span>Active facts</span><b id="devMemoryFacts">0</b></div>
+              <div class="devRow"><span>Episodic events</span><b id="devMemoryEpisodes">0</b></div>
+              <div class="devRow"><span>Last episode</span><b id="devMemoryLastEpisode" style="max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">none</b></div>
               <div class="devRow"><span>Memory profiles</span><b id="devMemoryProfiles">0</b></div>
               <div class="devRow"><span>Active profile ID</span><b id="devMemoryActive">UNKNOWN</b></div>
               <div class="devRow"><span>Last memory change</span><b id="devMemoryChange">none</b></div>
+            </section>
+            <section class="devCard" id="devPersonalityCard">
+              <div class="devTitle">PERSONALITY & BRAIN TUNING · PHASE E</div>
+              <div class="devRow" style="align-items:center;">
+                <span>Humor Level (<b id="devHumorVal">85%</b>)</span>
+                <input type="range" id="devHumorSlider" min="0" max="100" value="85" style="width:110px;accent-color:var(--cyan);cursor:pointer;">
+              </div>
+              <div class="devRow" style="align-items:center;">
+                <span>Sass / Attitude (<b id="devAttitudeVal">Witty</b>)</span>
+                <select id="devAttitudeSelect" style="background:#111;color:var(--cyan);border:1px solid #333;border-radius:4px;padding:2px 6px;font-size:11px;">
+                  <option value="polite">Polite</option>
+                  <option value="witty" selected>Witty</option>
+                  <option value="sarcastic">Sarcastic</option>
+                  <option value="feisty">Feisty</option>
+                </select>
+              </div>
+              <div class="devRow" style="align-items:center;">
+                <span>Verbosity</span>
+                <select id="devVerbositySelect" style="background:#111;color:var(--cyan);border:1px solid #333;border-radius:4px;padding:2px 6px;font-size:11px;">
+                  <option value="concise" selected>Concise (1-2 lines)</option>
+                  <option value="detailed">Detailed (In-depth)</option>
+                </select>
+              </div>
+              <div class="devRow" style="flex-direction:column;align-items:flex-start;gap:4px;margin-top:6px;">
+                <span>Custom Directives</span>
+                <input type="text" id="devCustomDirectiveInput" placeholder="e.g. Call me Boss; Roast bad ideas" style="width:100%;background:#111;color:#eee;border:1px solid #333;border-radius:4px;padding:4px 8px;font-size:11px;">
+              </div>
             </section>
             <section class="devCard">
               <div class="devTitle">SOCIAL AWARENESS · MODULE 6</div>
@@ -3625,6 +3654,13 @@ button{font:inherit}
   const MEMORY_STORAGE_KEY = 'robo_aios_memory_v2';
   const FACTORY_RESET_V2_91_KEY = 'robo_aios_v2_91_factory_reset_done';
   const MEMORY_SCHEMA_VERSION = 2;
+  const DEFAULT_PERSONALITY = () => ({
+    humor: 0.85,
+    attitude: 'witty',
+    verbosity: 'concise',
+    customDirectives: []
+  });
+
   const DEFAULT_PERSON = () => ({
     personId:'primary-user',
     displayName:'',
@@ -3633,6 +3669,12 @@ button{font:inherit}
     facts:[],
     preferences:{},
     memories:[],
+    episodes:[],
+    workingContext:{
+      currentTopic:'',
+      lastSeenAt:Date.now(),
+      recentVisuals:[]
+    },
     faceProfiles:[],
     createdAt:Date.now(),
     updatedAt:Date.now()
@@ -3642,11 +3684,13 @@ button{font:inherit}
     schemaVersion:MEMORY_SCHEMA_VERSION,
     primaryPersonId:'primary-user',
     activePersonId:'primary-user',
+    personality:DEFAULT_PERSONALITY(),
     persons:[DEFAULT_PERSON()],
     identity:{displayName:'',aliases:[],personId:'primary-user',recognitionReady:false},
     facts:[],
     preferences:{},
     memories:[],
+    episodes:[],
     faceProfiles:[],
     createdAt:Date.now(),
     updatedAt:Date.now()
@@ -3903,6 +3947,10 @@ button{font:inherit}
       roboMemory.persons=[primary];
     }
 
+    if(!roboMemory.personality || typeof roboMemory.personality!=='object'){
+      roboMemory.personality=DEFAULT_PERSONALITY();
+    }
+
     // Normalize existing people first.
     roboMemory.persons=roboMemory.persons.map(p=>({
       ...DEFAULT_PERSON(),
@@ -3911,6 +3959,8 @@ button{font:inherit}
       facts:Array.isArray(p?.facts)?p.facts:[],
       preferences:{...(p?.preferences||{})},
       memories:Array.isArray(p?.memories)?p.memories:[],
+      episodes:Array.isArray(p?.episodes)?p.episodes:[],
+      workingContext:{...(p?.workingContext||{currentTopic:'',lastSeenAt:Date.now(),recentVisuals:[]})},
       faceProfiles:Array.isArray(p?.faceProfiles)?p.faceProfiles:[]
     }));
     roboMemory.persons.forEach(normalizePersonFaceProfileBank);
@@ -4200,10 +4250,29 @@ button{font:inherit}
       'MEMORY & IDENTITY CONTEXT — persistent browser-local multi-person registry.',
       `Active person: ${active?.displayName||'unknown'} (${active?.personId||'none'}).`,
       `Known people: ${registry.length ? registry.join(' | ') : 'none'}.`,
-      active ? personSummary(active) : 'No active person profile.',
+      active ? personSummary(active) : 'No active person profile.'
+    ];
+
+    if(active && Array.isArray(active.episodes) && active.episodes.length){
+      const recentEps=active.episodes.slice(-3);
+      lines.push('Recent episodic memories with '+(active.displayName||'user')+':');
+      for(const ep of recentEps){
+        lines.push(`- ${formatRelativeTime(ep.timestamp)}: ${ep.summary}`);
+      }
+    }
+
+    if(roboMemory.personality){
+      const p=roboMemory.personality;
+      lines.push(`PERSONALITY TUNING — Humor: ${Math.round((p.humor||0.85)*100)}%, Attitude: ${p.attitude||'witty'}, Verbosity: ${p.verbosity||'concise'}.`);
+      if(Array.isArray(p.customDirectives) && p.customDirectives.length){
+        lines.push('Live user directives: '+p.customDirectives.join('; '));
+      }
+    }
+
+    lines.push(
       'Only use the active identity when local face recognition explicitly identifies the current tracked face. Do not guess identity from appearance, social context, or name alone.',
       'When the user asks about another known person by name, use that person registry entry even if they are not currently visible.'
-    ];
+    );
     return lines.join('\n');
   }
 
@@ -4231,6 +4300,42 @@ button{font:inherit}
     const templateCount=roboMemory.persons.reduce((n,p)=>n+(Array.isArray(p.faceProfiles)?p.faceProfiles.length:0),0);
     if(typeof devMemoryStatus!=='undefined' && devMemoryStatus && memoryReady && templateCount===0){
       devMemoryStatus.textContent='ONLINE · NO FACE TEMPLATE';
+    }
+
+    const epCount = Array.isArray(active?.episodes) ? active.episodes.length : 0;
+    const lastEp = epCount ? active.episodes[active.episodes.length-1] : null;
+    const devMemoryEpisodes = $('#devMemoryEpisodes');
+    if(devMemoryEpisodes) devMemoryEpisodes.textContent = String(epCount);
+    const devMemoryLastEpisode = $('#devMemoryLastEpisode');
+    if(devMemoryLastEpisode) devMemoryLastEpisode.textContent = lastEp ? `${formatRelativeTime(lastEp.timestamp)}: ${lastEp.summary}` : 'none';
+
+    if(roboMemory.personality){
+      const p = roboMemory.personality;
+      const humorSlider = $('#devHumorSlider');
+      const humorVal = $('#devHumorVal');
+      const attitudeSelect = $('#devAttitudeSelect');
+      const attitudeVal = $('#devAttitudeVal');
+      const verbositySelect = $('#devVerbositySelect');
+      const customInput = $('#devCustomDirectiveInput');
+
+      if(humorSlider && document.activeElement !== humorSlider){
+        humorSlider.value = String(Math.round((p.humor ?? 0.85) * 100));
+      }
+      if(humorVal){
+        humorVal.textContent = `${Math.round((p.humor ?? 0.85) * 100)}%`;
+      }
+      if(attitudeSelect && document.activeElement !== attitudeSelect){
+        attitudeSelect.value = p.attitude || 'witty';
+      }
+      if(attitudeVal){
+        attitudeVal.textContent = (p.attitude || 'Witty').charAt(0).toUpperCase() + (p.attitude || 'Witty').slice(1);
+      }
+      if(verbositySelect && document.activeElement !== verbositySelect){
+        verbositySelect.value = p.verbosity || 'concise';
+      }
+      if(customInput && document.activeElement !== customInput){
+        customInput.value = Array.isArray(p.customDirectives) ? p.customDirectives.join('; ') : '';
+      }
     }
   }
 
@@ -4377,7 +4482,75 @@ button{font:inherit}
       totalRegisteredPeople:roboMemory.persons.length
     });
 
-    return {ok:true,person,created:!wasExisting};
+  function formatRelativeTime(timestamp){
+    if(!timestamp) return 'earlier';
+    const diff=Date.now()-Number(timestamp);
+    if(diff<60000) return 'just now';
+    if(diff<3600000) return `${Math.floor(diff/60000)} minutes ago`;
+    if(diff<86400000) return `${Math.floor(diff/3600000)} hours ago`;
+    if(diff<172800000) return 'yesterday';
+    return `${Math.floor(diff/86400000)} days ago`;
+  }
+
+  function recordEpisode(summary, type='conversation', emotion='neutral'){
+    if(!roboMemory || !summary) return null;
+    ensureMemoryRegistry();
+    const person=getActivePerson() || roboMemory.persons.find(p=>p.personId==='primary-user') || roboMemory.persons[0];
+    if(!person) return null;
+    if(!Array.isArray(person.episodes)) person.episodes=[];
+
+    const lastEp=person.episodes[person.episodes.length-1];
+    if(lastEp && (Date.now()-lastEp.timestamp<20000) && lastEp.summary===summary){
+      return lastEp;
+    }
+
+    const episode={
+      id:'ep-'+Date.now()+'-'+Math.random().toString(36).slice(2,6),
+      timestamp:Date.now(),
+      summary:String(summary).trim(),
+      type,
+      emotion:emotion||'neutral',
+      personId:person.personId
+    };
+
+    person.episodes.push(episode);
+    if(person.episodes.length>50) person.episodes.splice(0, person.episodes.length-50);
+    saveRoboMemory('episode-recorded');
+    renderMemoryDiagnostics();
+    devLog('MEMORY','episodic event recorded',{summary:episode.summary,person:person.displayName,total:person.episodes.length});
+    return episode;
+  }
+
+  function extractImplicitMemories(text){
+    if(!text || !roboMemory) return false;
+    const clean=String(text).trim();
+    let extracted=false;
+
+    const bdayMatch=clean.match(/(?:my birthday is on|my birthday is)\s+([A-Za-z0-9 ,]{3,30})/i);
+    if(bdayMatch){
+      addFact('birthday', bdayMatch[1].trim().replace(/[.!?]+$/,''));
+      extracted=true;
+    }
+
+    const jobMatch=clean.match(/(?:i work as a|i am a|i work as an)\s+([A-Za-z0-9 ]{3,35})(?:\s+at|\.|\!|\?|$)/i);
+    if(jobMatch && !/^(robot|ai|human|person|man|woman|boy|girl)$/i.test(jobMatch[1].trim())){
+      addFact('profession', jobMatch[1].trim());
+      extracted=true;
+    }
+
+    const cityMatch=clean.match(/(?:i live in|i'm from|i am from)\s+([A-Za-z ]{2,30})(?:\.|\!|\?|$)/i);
+    if(cityMatch){
+      addFact('location', cityMatch[1].trim());
+      extracted=true;
+    }
+
+    const petMatch=clean.match(/(?:my (?:dog|cat|pet)(?:'s)? name is|i have a (?:dog|cat|pet) named)\s+([A-Za-z]{2,20})/i);
+    if(petMatch){
+      addFact('pet', petMatch[1].trim());
+      extracted=true;
+    }
+
+    return extracted;
   }
 
   async function handleMemoryCommand(text){
@@ -4402,6 +4575,173 @@ button{font:inherit}
     if(/^(forget everything|forget all memories|forget all the (?:profiles?|people?|identities?) (?:you )?(?:remember|remembered)|clear all memory|clear all memories|erase all memory|erase all memories|delete all memories|delete all profiles|reset all memory|reset memory)$/.test(l)){
       clearAllRoboMemory();
       return {handled:true,reply:'I cleared my persistent multi-person memory.',emotion:'neutral'};
+    }
+
+    // Phase 7: Episodic recall commands
+    if(/^(?:what did we talk about|what did we do|what happened)\s+(?:last time|recently|earlier|before|yesterday)\??$/i.test(l) || /^what was our last conversation\??$/i.test(l)){
+      const active=getActivePerson();
+      if(active && Array.isArray(active.episodes) && active.episodes.length){
+        const lastEp=active.episodes[active.episodes.length-1];
+        return {
+          handled:true,
+          reply:`${formatRelativeTime(lastEp.timestamp)}, we were discussing: ${lastEp.summary}`,
+          emotion:'happy'
+        };
+      }
+      return {
+        handled:true,
+        reply:"We haven't shared many conversations yet today, but I'm ready to make new memories with you!",
+        emotion:'curious'
+      };
+    }
+
+    const rememberWhen = l.match(/^(?:do you remember when|remember when)\s+(.+?)\??$/i);
+    if(rememberWhen){
+      const query = rememberWhen[1].trim().toLowerCase();
+      const active = getActivePerson();
+      if(active && Array.isArray(active.episodes)){
+        const matchedEp = active.episodes.slice().reverse().find(ep => ep.summary.toLowerCase().includes(query));
+        if(matchedEp){
+          return {
+            handled:true,
+            reply:`Yes! ${formatRelativeTime(matchedEp.timestamp)}, we talked about: ${matchedEp.summary}`,
+            emotion:'excited'
+          };
+        }
+      }
+      return {
+        handled:true,
+        reply:`I don't have a specific memory of "${query}" in my timeline yet, but I'll remember it from now on!`,
+        emotion:'curious'
+      };
+    }
+
+    // Phase E: Real-time personality tuning via voice
+    const humorMatch = l.match(/^(?:set humor to|change humor to|humor level)\s+(\d{1,3})%?$/i);
+    if(humorMatch){
+      const pct = Math.max(0, Math.min(100, parseInt(humorMatch[1], 10)));
+      if(!roboMemory.personality) roboMemory.personality = DEFAULT_PERSONALITY();
+      roboMemory.personality.humor = pct / 100;
+      saveRoboMemory('personality-humor-voice');
+      renderMemoryDiagnostics();
+      if(typeof cozmoSoundEngine !== 'undefined') cozmoSoundEngine.playChirp();
+      return {
+        handled:true,
+        reply: pct >= 80
+          ? `Humor cranked up to ${pct}%! Prepare to laugh your circuits off!`
+          : `Humor set to ${pct}%. I'll keep my jokes balanced!`,
+        emotion:'happy'
+      };
+    }
+
+    if(/^(?:be more funny|be more humorous|tell more jokes|make more jokes)$/i.test(l)){
+      if(!roboMemory.personality) roboMemory.personality = DEFAULT_PERSONALITY();
+      roboMemory.personality.humor = Math.min(1.0, (roboMemory.personality.humor || 0.85) + 0.15);
+      saveRoboMemory('personality-humor-voice');
+      renderMemoryDiagnostics();
+      if(typeof cozmoSoundEngine !== 'undefined') cozmoSoundEngine.playChirp();
+      return {
+        handled:true,
+        reply:`You got it! Humor boosted to ${Math.round(roboMemory.personality.humor * 100)}%!`,
+        emotion:'happy'
+      };
+    }
+
+    const attitudeMatch = l.match(/^(?:set attitude to|change attitude to|be|set tone to)\s+(polite|gentle|witty|sarcastic|feisty)[.!?]?$/i);
+    if(attitudeMatch){
+      const att = attitudeMatch[1].toLowerCase() === 'gentle' ? 'polite' : attitudeMatch[1].toLowerCase();
+      if(!roboMemory.personality) roboMemory.personality = DEFAULT_PERSONALITY();
+      roboMemory.personality.attitude = att;
+      saveRoboMemory('personality-attitude-voice');
+      renderMemoryDiagnostics();
+      if(typeof cozmoSoundEngine !== 'undefined') cozmoSoundEngine.playChirp();
+      return {
+        handled:true,
+        reply: att === 'sarcastic'
+          ? "Sarcasm protocol engaged. Don't say I didn't warn you!"
+          : att === 'feisty'
+            ? "Feisty Cozmo mode active! Ready to roll!"
+            : `Tone updated to ${att}. At your service!`,
+        emotion: att === 'sarcastic' ? 'smirk' : 'happy'
+      };
+    }
+
+    if(/^(?:keep answers short|be concise|keep it brief|speak concisely)$/i.test(l)){
+      if(!roboMemory.personality) roboMemory.personality = DEFAULT_PERSONALITY();
+      roboMemory.personality.verbosity = 'concise';
+      saveRoboMemory('personality-verbosity-voice');
+      renderMemoryDiagnostics();
+      return {
+        handled:true,
+        reply:"Understood. Punchy, short answers from now on.",
+        emotion:'neutral'
+      };
+    }
+
+    if(/^(?:explain in detail|be more detailed|give detailed answers)$/i.test(l)){
+      if(!roboMemory.personality) roboMemory.personality = DEFAULT_PERSONALITY();
+      roboMemory.personality.verbosity = 'detailed';
+      saveRoboMemory('personality-verbosity-voice');
+      renderMemoryDiagnostics();
+      return {
+        handled:true,
+        reply:"Got it! I will provide thorough, detailed explanations for your questions.",
+        emotion:'happy'
+      };
+    }
+
+    const directiveMatch = raw.match(/^(?:from now on|rule:?)\s+(call me .+|act like .+|treat me .+)$/i);
+    if(directiveMatch){
+      const rule = directiveMatch[1].trim();
+      if(!roboMemory.personality) roboMemory.personality = DEFAULT_PERSONALITY();
+      if(!Array.isArray(roboMemory.personality.customDirectives)) roboMemory.personality.customDirectives = [];
+      if(!roboMemory.personality.customDirectives.includes(rule)){
+        roboMemory.personality.customDirectives.push(rule);
+      }
+      saveRoboMemory('personality-directive-voice');
+      renderMemoryDiagnostics();
+      return {
+        handled:true,
+        reply:`Directive added: "${rule}". I've stored this in my live brain directives!`,
+        emotion:'excited'
+      };
+    }
+
+    if(/^(?:reset personality|reset your personality|default personality)$/i.test(l)){
+      roboMemory.personality = DEFAULT_PERSONALITY();
+      saveRoboMemory('personality-reset-voice');
+      renderMemoryDiagnostics();
+      if(typeof cozmoSoundEngine !== 'undefined') cozmoSoundEngine.playChirp();
+      return {
+        handled:true,
+        reply:"My personality parameters and directives have been reset to factory default.",
+        emotion:'happy'
+      };
+    }
+
+    const targetedForget = l.match(/^(?:forget my|delete my|remove my)\s+(birthday|profession|job|pet|location|city|favorite [a-z0-9 ]+|likes?|dislikes?|preferences?)$/i);
+    if(targetedForget){
+      const targetKey = targetedForget[1].trim();
+      const person = getActivePerson();
+      if(person && Array.isArray(person.facts)){
+        const initialLen = person.facts.length;
+        person.facts = person.facts.filter(f => !String(f.key).toLowerCase().includes(targetKey.toLowerCase()));
+        if(person.preferences && person.preferences[targetKey]) delete person.preferences[targetKey];
+        if(person.facts.length < initialLen){
+          saveRoboMemory('fact-deleted');
+          renderMemoryDiagnostics();
+          return {
+            handled:true,
+            reply:`I removed ${targetKey} from your active memory profile.`,
+            emotion:'neutral'
+          };
+        }
+      }
+      return {
+        handled:true,
+        reply:`I didn't have ${targetKey} stored in your active profile.`,
+        emotion:'confused'
+      };
     }
 
     // Phase C: Biometric Face Enrollment Wizard voice command
@@ -8300,6 +8640,7 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
         ? cameraSessionForRequest
         : null,
       languageHint: languageHint || 'en',
+      personality: roboMemory?.personality || null,
       image:
         cameraEnabledForRequest === true && image
           ? image
@@ -8564,6 +8905,8 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
       if(data?.action && typeof robotActionEngine !== 'undefined') {
         robotActionEngine.executeAction(data.action);
       }
+      extractImplicitMemories(clean);
+      recordEpisode(`User: "${clean.slice(0, 50)}" — Max: "${reply.slice(0, 50)}"`, 'conversation', emotion);
       conversation.push({role:'assistant',content:reply});
       while(conversation.length>MAX_HISTORY) conversation.shift();
       if(devAI) devAI.textContent=(data.provider||'GEMINI').toUpperCase()+' · CONNECTED';
@@ -8573,6 +8916,8 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
     }catch(err){
       // v2.12 remains usable before an API key is installed.
       const fallback=localFallback(clean);
+      extractImplicitMemories(clean);
+      recordEpisode(`User: "${clean.slice(0, 50)}"`, 'conversation', emotion);
       conversation.push({role:'assistant',content:fallback});
       while(conversation.length>MAX_HISTORY) conversation.shift();
       if(devAI) devAI.textContent=err.code==='AI_NOT_CONFIGURED'?'NOT CONNECTED · LOCAL FALLBACK':'AI ERROR · LOCAL FALLBACK';
@@ -8976,6 +9321,8 @@ function runDevChecks(){
       ["Module 8 face overlay",!!$("#faceTrackingOverlay")],
       ["Social awareness UI",!!$("#socialAwareness")],
       ["Module 7 memory engine",typeof handleMemoryCommand==="function"],
+      ["Module 7.5 Episodic memory engine", typeof recordEpisode === "function"],
+      ["Phase E Real-time personality engine", !!(roboMemory && roboMemory.personality)],
       ["Multi-person memory registry",!!(roboMemory&&Array.isArray(roboMemory.persons)&&roboMemory.persons.length>0)],
       ["Active identity resolver",typeof findFaceMatch==="function"&&typeof setActivePerson==="function"],
       ["Live face → social coupling",typeof deriveLiveSocialFromFaces==="function"],
@@ -9302,6 +9649,53 @@ $("#clearLogs")?.addEventListener("click",()=>{
   devLogLines=["[CLEARED] Log cleared by user."];
   devLogs.textContent=devLogLines[0];
 });
+
+// Phase E: Live Dev Screen Personality Tuning Sliders
+const devHumorSlider = document.getElementById('devHumorSlider');
+const devHumorVal = document.getElementById('devHumorVal');
+const devAttitudeSelect = document.getElementById('devAttitudeSelect');
+const devAttitudeVal = document.getElementById('devAttitudeVal');
+const devVerbositySelect = document.getElementById('devVerbositySelect');
+const devCustomDirectiveInput = document.getElementById('devCustomDirectiveInput');
+
+devHumorSlider?.addEventListener('input', (e) => {
+  const val = Number(e.target.value);
+  if(devHumorVal) devHumorVal.textContent = `${val}%`;
+  if(roboMemory){
+    if(!roboMemory.personality) roboMemory.personality = DEFAULT_PERSONALITY();
+    roboMemory.personality.humor = val / 100;
+    saveRoboMemory('personality-humor-slider');
+  }
+});
+
+devAttitudeSelect?.addEventListener('change', (e) => {
+  const val = e.target.value;
+  if(devAttitudeVal) devAttitudeVal.textContent = val.charAt(0).toUpperCase() + val.slice(1);
+  if(roboMemory){
+    if(!roboMemory.personality) roboMemory.personality = DEFAULT_PERSONALITY();
+    roboMemory.personality.attitude = val;
+    saveRoboMemory('personality-attitude-select');
+  }
+});
+
+devVerbositySelect?.addEventListener('change', (e) => {
+  const val = e.target.value;
+  if(roboMemory){
+    if(!roboMemory.personality) roboMemory.personality = DEFAULT_PERSONALITY();
+    roboMemory.personality.verbosity = val;
+    saveRoboMemory('personality-verbosity-select');
+  }
+});
+
+devCustomDirectiveInput?.addEventListener('change', (e) => {
+  const val = e.target.value.trim();
+  if(roboMemory){
+    if(!roboMemory.personality) roboMemory.personality = DEFAULT_PERSONALITY();
+    roboMemory.personality.customDirectives = val ? val.split(';').map(s=>s.trim()).filter(Boolean) : [];
+    saveRoboMemory('personality-custom-directives');
+  }
+});
+
 $("#copyLogs")?.addEventListener("click", async () => {
   const btn = document.getElementById("copyLogs");
   const origText = btn ? btn.textContent : "COPY LOGS";
