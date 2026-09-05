@@ -573,6 +573,14 @@ async function elevenLabsTTS(
     );
   }
 
+  if (!apiKey.startsWith('sk_')) {
+    throw makeError(
+      "API key ID used as API key. ElevenLabs API keys start with 'sk_'. Please copy the secret API key generated in your ElevenLabs dashboard, not the Key ID from the table.",
+      'ELEVENLABS_API_ERROR',
+      400,
+    );
+  }
+
   if (!voiceId) {
     throw makeError(
       'ELEVENLABS_VOICE_ID is not configured',
@@ -820,17 +828,29 @@ export default async function handler(
         elevenLabs: {
           configured:
             Boolean(
-              process.env
-                .ELEVENLABS_API_KEY || customElevenKey,
+              (process.env.ELEVENLABS_API_KEY &&
+                process.env.ELEVENLABS_API_KEY.startsWith('sk_')) ||
+                (customElevenKey && customElevenKey.startsWith('sk_')),
             ),
 
           voiceConfigured:
             Boolean(
-              process.env
-                .ELEVENLABS_VOICE_ID ||
+              process.env.ELEVENLABS_VOICE_ID ||
                 req.headers['x-elevenlabs-voice-id'] ||
-                customElevenKey,
+                (customElevenKey && customElevenKey.startsWith('sk_')),
             ),
+
+          keyFormatValid:
+            customElevenKey
+              ? customElevenKey.startsWith('sk_')
+              : (process.env.ELEVENLABS_API_KEY
+                  ? process.env.ELEVENLABS_API_KEY.startsWith('sk_')
+                  : false),
+
+          keyFormatError:
+            customElevenKey && !customElevenKey.startsWith('sk_')
+              ? "Key ID was entered instead of secret key (must start with 'sk_')"
+              : null,
 
           model:
             process.env

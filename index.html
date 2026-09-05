@@ -829,9 +829,9 @@ button{font:inherit}
                   <div class="metricSub">Required for Gemini LLM brain & structured scene vision.</div>
                 </div>
                 <div>
-                  <span class="metricLabel">ELEVENLABS API KEY (Optional High-Fidelity Voice)</span>
-                  <input type="password" id="elevenKeyInput" placeholder="xi-api-key... (Optional)" style="width:100%;box-sizing:border-box;background:#0d111a;border:1px solid rgba(255,255,255,.14);border-radius:8px;color:#fff;padding:9px 12px;font-size:11px;outline:none;font-family:monospace;margin-top:4px;" />
-                  <div class="metricSub">Optional high-fidelity voices (browser TTS is active by default).</div>
+                  <span class="metricLabel">ELEVENLABS SECRET KEY (Starts with sk_)</span>
+                  <input type="password" id="elevenKeyInput" placeholder="sk_... (Starts with sk_)" style="width:100%;box-sizing:border-box;background:#0d111a;border:1px solid rgba(255,255,255,.14);border-radius:8px;color:#fff;padding:9px 12px;font-size:11px;outline:none;font-family:monospace;margin-top:4px;" />
+                  <div class="metricSub" id="elevenKeyHint">Must start with <code>sk_</code> (copy secret key when created, not Key ID).</div>
                 </div>
                 <div>
                   <span class="metricLabel">ELEVENLABS VOICE ID (Custom Cloned Voice)</span>
@@ -10846,10 +10846,28 @@ function hookRecognitionDiagnostics(r){
   if (elevenInput) elevenInput.value = localStorage.getItem('robo_elevenlabs_api_key') || '';
   if (elevenVoiceInput) elevenVoiceInput.value = localStorage.getItem('robo_elevenlabs_voice_id') || '';
 
+  function updateElevenKeyStatus(){
+    const val = elevenInput?.value?.trim() || '';
+    const hint = $('#elevenKeyHint');
+    if (!hint) return;
+    if (val && !val.startsWith('sk_')) {
+      hint.innerHTML = '<span style="color:var(--coral);font-weight:700;">⚠️ Invalid key format: must start with "sk_". You pasted the Key ID instead of the secret key!</span>';
+    } else if (val && val.startsWith('sk_')) {
+      hint.innerHTML = '<span style="color:var(--green);font-weight:700;">✓ Valid secret key format (starts with sk_)</span>';
+    } else {
+      hint.innerHTML = 'Must start with <code>sk_</code> (copy secret key when created, not Key ID).';
+    }
+  }
+  elevenInput?.addEventListener('input', updateElevenKeyStatus);
+  updateElevenKeyStatus();
+
   $('#saveApiKeysBtn')?.addEventListener('click', async () => {
     const gKey = geminiInput?.value?.trim() || '';
     const eKey = elevenInput?.value?.trim() || '';
     const eVoice = elevenVoiceInput?.value?.trim() || '';
+
+    elevenLabsQuotaExhausted = false; // Reset error lock so fresh keys are immediately tried
+
     if (gKey) localStorage.setItem('robo_gemini_api_key', gKey);
     else localStorage.removeItem('robo_gemini_api_key');
     if (eKey) localStorage.setItem('robo_elevenlabs_api_key', eKey);
@@ -10857,8 +10875,16 @@ function hookRecognitionDiagnostics(r){
     if (eVoice) localStorage.setItem('robo_elevenlabs_voice_id', eVoice);
     else localStorage.removeItem('robo_elevenlabs_voice_id');
 
-    showCaption('API Keys Saved! Reconnecting AI brain…', true);
-    hideCaption(3000);
+    updateElevenKeyStatus();
+
+    if (eKey && !eKey.startsWith('sk_')) {
+      showCaption('⚠️ ELEVENLABS KEY ERROR\nKeys start with "sk_". You entered Key ID instead of secret key!', true);
+      hideCaption(4500);
+      devLog('TTS ERROR', 'ElevenLabs API key does not start with sk_. You entered the Key ID instead of the secret key.');
+    } else {
+      showCaption('API Keys Saved! Reconnecting AI brain…', true);
+      hideCaption(3000);
+    }
     await refreshAIProviderDiagnostic();
     runDevChecks();
   });
