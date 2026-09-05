@@ -937,25 +937,6 @@ button{font:inherit}
                 <input type="text" id="devCustomDirectiveInput" placeholder="e.g. Call me Boss; Roast bad ideas" style="width:100%;background:#111;color:#eee;border:1px solid #333;border-radius:4px;padding:4px 8px;font-size:11px;">
               </div>
             </section>
-            <section class="devCard" id="devApiKeyCard">
-              <div class="devTitle">PRODUCTION GEMINI API & CLOUD BRAIN</div>
-              <div class="devRow"><span>Server Brain Status</span><b id="devAiServerStatus">CHECKING…</b></div>
-              <div class="devRow"><span>Active AI Model</span><b id="devAiModelVal">gemini-1.5-flash</b></div>
-              <div class="devRow"><span>Key Source</span><b id="devAiKeySource">none</b></div>
-              <div class="devRow" style="flex-direction:column;align-items:flex-start;gap:6px;margin-top:6px;">
-                <div style="display:flex;justify-content:space-between;width:100%;align-items:center;">
-                  <span>Custom Gemini API Key</span>
-                  <button class="devAction" id="devToggleKeyVisBtn" style="padding:2px 6px;font-size:7px;">SHOW</button>
-                </div>
-                <input type="password" id="devGeminiKeyInput" placeholder="AIzaSy... (saved in localStorage)" style="width:100%;background:#111;color:#eee;border:1px solid #333;border-radius:4px;padding:4px 8px;font-size:11px;">
-              </div>
-              <div class="devActions" style="margin-top:8px;margin-bottom:0;display:flex;gap:6px;flex-wrap:wrap;">
-                <button class="devAction" id="devSaveKeyBtn" style="border-color:var(--cyan);color:var(--cyan);">SAVE KEY</button>
-                <button class="devAction" id="devTestKeyBtn">TEST CONNECTION</button>
-                <button class="devAction" id="devClearKeyBtn" style="border-color:#ff7777;color:#ff7777;">CLEAR KEY</button>
-              </div>
-              <div id="devKeyTestResult" style="font-size:8px;margin-top:6px;color:#8f98aa;display:none;padding:6px;border-radius:4px;background:#0d1117;"></div>
-            </section>
             <section class="devCard">
               <div class="devTitle">SOCIAL AWARENESS · MODULE 6</div>
               <div class="devRow"><span>Human presence</span><b id="devSocialPresence">UNKNOWN</b></div>
@@ -9307,26 +9288,6 @@ async function refreshAIProviderDiagnostic(){
       row.lastElementChild.textContent=data.configured?'PASS':'NOT CONFIGURED';
     }
 
-    const serverStatus = document.getElementById('devAiServerStatus');
-    const modelVal = document.getElementById('devAiModelVal');
-    const keySourceVal = document.getElementById('devAiKeySource');
-    const keyInput = document.getElementById('devGeminiKeyInput');
-
-    if(serverStatus) {
-      serverStatus.textContent = data.configured ? 'ONLINE · READY' : 'NO API KEY DETECTED';
-      serverStatus.style.color = data.configured ? '#7ee59a' : '#ff7777';
-    }
-    if(modelVal) modelVal.textContent = data.model || 'gemini-1.5-flash';
-    if(keySourceVal) {
-      keySourceVal.textContent = data.keySource === 'server-env'
-        ? 'VERCEL SERVER ENV'
-        : (data.keySource === 'custom-key' ? 'LOCAL CUSTOM KEY' : 'NONE (MOCK)');
-      keySourceVal.style.color = data.configured ? '#69d8cf' : '#8f98aa';
-    }
-    if(keyInput && document.activeElement !== keyInput && !keyInput.value) {
-      keyInput.value = savedGeminiKey || '';
-    }
-
     devLog('CHECK','AI provider: '+provider+' · '+model+' · configured='+(data.configured?'yes':'no')+' · vision='+(data.vision?'yes':'no'));
     const el=data.elevenLabs||{};
     devLog('TTS','ElevenLabs config · api='+(el.configured?'PASS':'FAIL')+' · voice='+(el.voiceConfigured?'PASS':'FAIL')+' · model='+(el.model||'unknown')+' · endpoint='+(el.endpoint||'unknown'));
@@ -9735,91 +9696,6 @@ devCustomDirectiveInput?.addEventListener('change', (e) => {
     if(!roboMemory.personality) roboMemory.personality = DEFAULT_PERSONALITY();
     roboMemory.personality.customDirectives = val ? val.split(';').map(s=>s.trim()).filter(Boolean) : [];
     saveRoboMemory('personality-custom-directives');
-  }
-});
-
-// Dev Screen Production Gemini API Key Management
-const devKeyInput = document.getElementById('devGeminiKeyInput');
-const devToggleVisBtn = document.getElementById('devToggleKeyVisBtn');
-const devSaveBtn = document.getElementById('devSaveKeyBtn');
-const devTestBtn = document.getElementById('devTestKeyBtn');
-const devClearBtn = document.getElementById('devClearKeyBtn');
-const devTestResult = document.getElementById('devKeyTestResult');
-
-if(devKeyInput && !devKeyInput.value){
-  devKeyInput.value = localStorage.getItem('robo_gemini_api_key') || '';
-}
-
-devToggleVisBtn?.addEventListener('click', () => {
-  if(!devKeyInput) return;
-  const isPass = devKeyInput.type === 'password';
-  devKeyInput.type = isPass ? 'text' : 'password';
-  devToggleVisBtn.textContent = isPass ? 'HIDE' : 'SHOW';
-});
-
-devSaveBtn?.addEventListener('click', () => {
-  if(!devKeyInput) return;
-  const val = devKeyInput.value.trim();
-  if(val){
-    localStorage.setItem('robo_gemini_api_key', val);
-    devLog('AI', 'Custom Gemini API Key saved to localStorage');
-    if(devTestResult){
-      devTestResult.style.display = 'block';
-      devTestResult.style.color = '#7ee59a';
-      devTestResult.textContent = 'Key saved to browser storage! Testing connection…';
-    }
-  } else {
-    localStorage.removeItem('robo_gemini_api_key');
-    devLog('AI', 'Custom Gemini API Key cleared');
-  }
-  refreshAIProviderDiagnostic();
-});
-
-devClearBtn?.addEventListener('click', () => {
-  localStorage.removeItem('robo_gemini_api_key');
-  if(devKeyInput) devKeyInput.value = '';
-  if(devTestResult){
-    devTestResult.style.display = 'block';
-    devTestResult.style.color = '#ff7777';
-    devTestResult.textContent = 'Custom key cleared from browser storage.';
-  }
-  devLog('AI', 'Custom Gemini key cleared by user');
-  refreshAIProviderDiagnostic();
-});
-
-devTestBtn?.addEventListener('click', async () => {
-  if(!devTestResult) return;
-  devTestResult.style.display = 'block';
-  devTestResult.style.color = '#69d8cf';
-  devTestResult.textContent = 'Pinging Gemini API via /api/robo…';
-
-  const testKey = devKeyInput?.value?.trim() || localStorage.getItem('robo_gemini_api_key') || '';
-  const headers = { 'Content-Type': 'application/json' };
-  if(testKey) headers['x-gemini-key'] = testKey;
-
-  const t0 = performance.now();
-  try {
-    const res = await fetch('/api/robo', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        messages: [{ role: 'user', content: 'Say hello in 5 words.' }],
-        cameraEnabled: false
-      })
-    });
-    const latency = Math.round(performance.now() - t0);
-    const data = await res.json().catch(() => ({}));
-    if(res.ok && data?.text){
-      devTestResult.style.color = '#7ee59a';
-      devTestResult.textContent = `SUCCESS (${latency}ms) · Gemini replied: "${data.text}"`;
-      refreshAIProviderDiagnostic();
-    } else {
-      devTestResult.style.color = '#ff7777';
-      devTestResult.textContent = `FAILED (${res.status}) · ${data?.error || data?.code || 'Check key and permissions'}`;
-    }
-  } catch(err) {
-    devTestResult.style.color = '#ff7777';
-    devTestResult.textContent = `NETWORK ERROR · ${err?.message || 'Could not connect'}`;
   }
 });
 

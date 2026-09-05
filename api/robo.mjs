@@ -320,8 +320,7 @@ const PROVIDERS = {
     }) {
       const key =
         apiKey ||
-        process.env.GEMINI_API_KEY ||
-        process.env.GOOGLE_API_KEY;
+        process.env.GEMINI_API_KEY;
 
       if (!key) {
         throw makeError(
@@ -397,107 +396,71 @@ const PROVIDERS = {
           },
         );
 
-      const candidateModels = [
-        process.env.GEMINI_MODEL,
-        'gemini-1.5-flash',
-        'gemini-2.0-flash',
-        'gemini-1.5-pro',
-      ].filter(Boolean);
+      const model =
+        process.env.GEMINI_MODEL ||
+        'gemini-3.1-flash-lite';
 
-      const modelsToTry = Array.from(new Set(candidateModels));
+      const endpoint =
+        `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
 
-      let lastError = null;
-      let lastResponse = null;
-      let data = null;
-      let succeededModel = null;
+      const response =
+        await fetch(
+          endpoint,
+          {
+            method: 'POST',
 
-      for (const modelToAttempt of modelsToTry) {
-        const endpoint =
-          `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelToAttempt)}:generateContent`;
+            headers: {
+              'Content-Type':
+                'application/json',
+              'x-goog-api-key':
+                key,
+            },
 
-        const controller = new AbortController();
-        const timeoutTimer = setTimeout(() => {
-          controller.abort();
-        }, 8500);
-
-        try {
-          const response = await fetch(
-            endpoint,
-            {
-              method: 'POST',
-              signal: controller.signal,
-              headers: {
-                'Content-Type': 'application/json',
-                'x-goog-api-key': key,
-              },
-              body: JSON.stringify({
-                systemInstruction: {
-                  parts: [
-                    {
-                      text: buildSystemPrompt(
+            body: JSON.stringify({
+              systemInstruction: {
+                parts: [
+                  {
+                    text:
+                      buildSystemPrompt(
                         languageHint,
                         personality,
                       ),
-                    },
-                  ],
-                },
-                contents,
-                generationConfig: {
-                  temperature: 0.3,
-                  maxOutputTokens: 500,
-                  responseMimeType: 'application/json',
-                  responseSchema: VISION_SCHEMA,
-                },
-              }),
-            },
-          );
-          clearTimeout(timeoutTimer);
+                  },
+                ],
+              },
 
-          data = await response.json().catch(() => ({}));
-          lastResponse = response;
+              contents,
 
-          if (response.ok) {
-            succeededModel = modelToAttempt;
-            break;
-          }
+              generationConfig: {
+                temperature: 0.3,
+                maxOutputTokens: 500,
+                responseMimeType:
+                  'application/json',
+                responseSchema:
+                  VISION_SCHEMA,
+              },
+            }),
+          },
+        );
 
-          const message =
-            data?.error?.message ||
-            `Gemini request failed (${response.status}) on ${modelToAttempt}`;
-
-          lastError = makeError(
-            message,
-            data?.error?.status ||
-              data?.error?.code ||
-              'GEMINI_API_ERROR',
-            response.status,
+      const data =
+        await response
+          .json()
+          .catch(
+            () => ({}),
           );
 
-          // If auth fails (400, 401, 403), don't waste time retrying other models with the same bad key
-          if (response.status === 400 || response.status === 401 || response.status === 403) {
-            throw lastError;
-          }
-        } catch (fetchErr) {
-          clearTimeout(timeoutTimer);
-          if (fetchErr.name === 'AbortError') {
-            throw makeError(
-              'Gemini request timed out after 8.5s',
-              'AI_TIMEOUT',
-              504,
-            );
-          }
-          if (fetchErr.code === 'AI_NOT_CONFIGURED' || fetchErr.status === 401 || fetchErr.status === 403) {
-            throw fetchErr;
-          }
-          lastError = fetchErr;
-        }
-      }
+      if (!response.ok) {
+        const message =
+          data?.error?.message ||
+          `Gemini request failed (${response.status})`;
 
-      if (!succeededModel || !lastResponse || !lastResponse.ok) {
-        throw lastError || makeError(
-          'All candidate Gemini models failed',
-          'AI_PROVIDER_ERROR',
-          502,
+        throw makeError(
+          message,
+          data?.error?.status ||
+            data?.error?.code ||
+            'GEMINI_API_ERROR',
+          response.status,
         );
       }
 
@@ -821,15 +784,14 @@ export default async function handler(
       }
     } catch (_) {}
 
-    const customGeminiKey =
-      req.headers['x-gemini-key'] ||
-      (req.headers['authorization'] ? req.headers['authorization'].replace(/^Bearer\s+/i, '').trim() : null);
+    const customGeminiKey = req.headers['x-gemini-key'];
     const customElevenKey = req.headers['x-elevenlabs-key'];
 
-    const hasServerEnv = Boolean(process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY);
     const configured =
       providerName === 'gemini'
-        ? Boolean(hasServerEnv || customGeminiKey)
+        ? Boolean(
+            process.env.GEMINI_API_KEY || customGeminiKey,
+          )
         : false;
 
     return json(
@@ -843,15 +805,10 @@ export default async function handler(
 
         configured,
 
-        keySource:
-          hasServerEnv
-            ? 'server-env'
-            : (customGeminiKey ? 'custom-key' : 'none'),
-
         model:
           providerName === 'gemini'
             ? process.env.GEMINI_MODEL ||
-              'gemini-1.5-flash'
+              'gemini-3.1-flash-lite'
             : null,
 
         vision:
@@ -1151,10 +1108,7 @@ export default async function handler(
             : null,
 
         apiKey:
-          req.headers['x-gemini-key'] ||
-          (req.headers['authorization'] ? req.headers['authorization'].replace(/^Bearer\s+/i, '').trim() : null) ||
-          (body && typeof body.apiKey === 'string' ? body.apiKey.trim() : null) ||
-          null,
+          req.headers['x-gemini-key'] || null,
       });
 
     return json(
