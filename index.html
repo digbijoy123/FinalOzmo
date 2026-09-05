@@ -836,7 +836,14 @@ button{font:inherit}
                 <div>
                   <span class="metricLabel">ELEVENLABS VOICE ID (Custom Cloned Voice)</span>
                   <input type="text" id="elevenVoiceInput" placeholder="e.g. 21m00Tcm4TlvDq8ikWAM or cloned Voice ID" style="width:100%;box-sizing:border-box;background:#0d111a;border:1px solid rgba(255,255,255,.14);border-radius:8px;color:#fff;padding:9px 12px;font-size:11px;outline:none;font-family:monospace;margin-top:4px;" />
-                  <div class="metricSub">Custom voice clone ID from ElevenLabs VoiceLab (or leave blank for default Rachel).</div>
+                  <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:6px;">
+                    <button type="button" class="voicePresetBtn" data-voice="21m00Tcm4TlvDq8ikWAM" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.18);border-radius:4px;color:#fff;font-size:9px;padding:3px 7px;cursor:pointer;">Rachel (Default)</button>
+                    <button type="button" class="voicePresetBtn" data-voice="pNInz6obpgDQGcFmaJgB" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.18);border-radius:4px;color:#fff;font-size:9px;padding:3px 7px;cursor:pointer;">Adam</button>
+                    <button type="button" class="voicePresetBtn" data-voice="ErXwobaYiN019PkySvjV" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.18);border-radius:4px;color:#fff;font-size:9px;padding:3px 7px;cursor:pointer;">Antoni</button>
+                    <button type="button" class="voicePresetBtn" data-voice="TxGEqnHWrfWFTfGW9XjX" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.18);border-radius:4px;color:#fff;font-size:9px;padding:3px 7px;cursor:pointer;">Josh</button>
+                    <button type="button" class="voicePresetBtn" data-voice="AZnzlk1XvdvUeBnXmlld" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.18);border-radius:4px;color:#fff;font-size:9px;padding:3px 7px;cursor:pointer;">Domi</button>
+                  </div>
+                  <div class="metricSub" style="margin-top:4px;"><b>Free tier:</b> use buttons above or your own VoiceLab clone. (Community Library voices require paid subscription).</div>
                 </div>
               </div>
             </section>
@@ -7698,7 +7705,7 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
       // Setup handshake with Cozmo persona and prebuilt voice
       const setupMessage = {
         setup: {
-          model: 'models/gemini-2.0-flash-exp',
+          model: 'models/gemini-2.0-flash-realtime-exp',
           generationConfig: {
             responseModalities: ['AUDIO'],
             speechConfig: {
@@ -9094,6 +9101,11 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
       if(response.status === 503 || code === 'TTS_NOT_CONFIGURED' || /not configured/i.test(message)){
         elevenLabsQuotaExhausted = true;
         devLog('TTS', 'ElevenLabs not configured on server · auto-disabled to prevent lag');
+      }
+      if(response.status === 402 || /Free users cannot use library voices/i.test(message)){
+        showCaption('⚠️ ElevenLabs Free Plan: Community voices are paid.\nPick Rachel/Adam in DEV or use your own VoiceLab clone!', true);
+        hideCaption(6000);
+        devLog('TTS', 'ElevenLabs Free tier limitation · Community library voices are restricted over API. Switch to Rachel, Adam, or your own VoiceLab clone.');
       }
       log('TTS ERROR · ElevenLabs HTTP '+response.status+' · '+code+' · '+message);
       ttsDiag('ERROR · ElevenLabs HTTP '+response.status+' · '+code+' · '+message);
@@ -10891,6 +10903,19 @@ function hookRecognitionDiagnostics(r){
     }
     await refreshAIProviderDiagnostic();
     runDevChecks();
+  });
+
+  $$('.voicePresetBtn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const vId = btn.getAttribute('data-voice');
+      if (elevenVoiceInput && vId) {
+        elevenVoiceInput.value = vId;
+        localStorage.setItem('robo_elevenlabs_voice_id', vId);
+        showCaption('Voice set to: ' + btn.textContent.trim(), true);
+        hideCaption(2000);
+        devLog('TTS', 'Selected voice preset: ' + btn.textContent.trim() + ' (' + vId + ')');
+      }
+    });
   });
 
   /* ---------- BLE / ESP32 scaffold ---------- */
