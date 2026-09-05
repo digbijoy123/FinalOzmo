@@ -1870,33 +1870,6 @@ button{font:inherit}
     return true;
   }
 
-  function renderLiveTargetPanel(){
-    // v2.81: the camera panel is intentionally clean.
-    // Live identity is shown on the face tracking box itself.
-    const summary=$('#visionSummary');
-    if(!summary) return;
-    summary.innerHTML='';
-    summary.classList.remove('show');
-    summary.setAttribute('aria-hidden','true');
-  }
-
-  function updateFaceVisualElement(el, box, labelEl){
-    if(!el || !isValidFaceBox(box) || !camera.videoWidth || !camera.videoHeight) return;
-    const rawWidthPct=(box.width/camera.videoWidth)*100;
-    const rawHeightPct=(box.height/camera.videoHeight)*100;
-    const squarePct=Math.max(6,Math.min(45,Math.max(rawWidthPct,rawHeightPct)));
-    let centerX=((box.x+box.width/2)/camera.videoWidth)*100;
-    let centerY=((box.y+box.height/2)/camera.videoHeight)*100;
-    if(cameraFacingMode==='user') centerX=100-centerX;
-    const left=Math.max(0,Math.min(100-squarePct,centerX-squarePct/2));
-    const top=Math.max(0,Math.min(100-squarePct,centerY-squarePct/2));
-    el.style.left=left+'%';
-    el.style.top=top+'%';
-    el.style.width=squarePct+'%';
-    el.style.height=squarePct+'%';
-    if(labelEl) labelEl.style.top=top<18?'calc(100% + 4px)':'-24px';
-  }
-
   function renderFaceTarget(){
     const overlay=$('#faceTrackingOverlay');
     if(!overlay) return;
@@ -4074,6 +4047,19 @@ button{font:inherit}
     roboMemory.schemaVersion=MEMORY_SCHEMA_VERSION;
     roboMemory.primaryPersonId='primary-user';
     roboMemory.updatedAt=Date.now();
+
+    // Safety Quota Bounding: Cap biometric descriptors to max 8 samples per person & episodes to 50
+    if (Array.isArray(roboMemory.persons)) {
+      for (const p of roboMemory.persons) {
+        if (Array.isArray(p.faceProfiles) && p.faceProfiles.length > 8) {
+          p.faceProfiles = p.faceProfiles.slice(-8);
+        }
+        if (Array.isArray(p.episodes) && p.episodes.length > 50) {
+          p.episodes = p.episodes.slice(-50);
+        }
+      }
+    }
+
     try{
       localStorage.setItem(MEMORY_STORAGE_KEY,JSON.stringify(roboMemory));
       lastMemoryChange=change;
@@ -4082,6 +4068,27 @@ button{font:inherit}
       devLog('MEMORY',change,{profiles:roboMemory.persons.length,active:roboMemory.activePersonId});
       return true;
     }catch(err){
+      // QuotaExceededError Recovery: Automatically evict older episodic events and retry
+      if(err?.name === 'QuotaExceededError' || err?.code === 22 || /quota/i.test(err?.message || '')){
+        devLog('MEMORY WARN', 'localStorage QuotaExceededError · auto-pruning episodic history to save state');
+        try {
+          if (Array.isArray(roboMemory.persons)) {
+            for (const p of roboMemory.persons) {
+              if (Array.isArray(p.episodes)) p.episodes = p.episodes.slice(-20);
+              if (Array.isArray(p.memories)) p.memories = p.memories.slice(-30);
+            }
+          }
+          if (Array.isArray(logs) && logs.length > 50) logs.splice(0, logs.length - 50);
+          localStorage.setItem(MEMORY_STORAGE_KEY, JSON.stringify(roboMemory));
+          lastMemoryChange = change + ' (quota-pruned)';
+          renderMemoryIdentity();
+          renderMemoryDiagnostics();
+          devLog('MEMORY', 'memory saved after quota pruning');
+          return true;
+        } catch (retryErr) {
+          devLog('MEMORY ERROR', 'memory save retry failed after quota pruning', { message: retryErr?.message });
+        }
+      }
       lastMemoryChange='save-failed';
       devLog('MEMORY ERROR','persistent storage failed',{name:err?.name,message:err?.message});
       renderMemoryDiagnostics();
@@ -7488,6 +7495,32 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
     return voiceEngine.parseWakeUtterance(text);
   }
 
+  // Defensively unlock Web Audio context & re-arm Voice Recognition on user interactions and tab visibility
+  function ensureAudioAndVoiceUnlocked(reason = 'gesture') {
+    try {
+      if (typeof cozmoSoundEngine !== 'undefined' && cozmoSoundEngine) {
+        cozmoSoundEngine.initContext();
+      }
+    } catch (_) {}
+    try {
+      if (typeof voiceEngine !== 'undefined' && voiceEngine && voiceEngine.armed) {
+        if (!voiceEngine.running && !voiceEngine.starting && !talking && !aiRequestInFlight) {
+          voiceEngine.scheduleRestart(15);
+        }
+      }
+    } catch (_) {}
+  }
+
+  window.addEventListener('pointerdown', () => ensureAudioAndVoiceUnlocked('pointerdown'), { passive: true });
+  window.addEventListener('touchstart', () => ensureAudioAndVoiceUnlocked('touchstart'), { passive: true });
+  window.addEventListener('click', () => ensureAudioAndVoiceUnlocked('click'), { passive: true });
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      ensureAudioAndVoiceUnlocked('tab-visible');
+    }
+  });
+  window.addEventListener('focus', () => ensureAudioAndVoiceUnlocked('window-focus'));
+
   // Liveness Watchdog Heartbeat: guarantees listener is never left dead
   setInterval(() => {
     if (window.geminiLiveClient && (window.geminiLiveClient.connected || window.geminiLiveClient.connecting)) {
@@ -8278,7 +8311,7 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
     return String(name||'object').toLowerCase().replace(/\s+/g,' ').trim();
   }
 
-  function boxCenter(box){
+  function visionObjectCenter(box){
     if(!Array.isArray(box) || box.length!==4) return null;
     const n=box.map(Number);
     if(n.some(v=>!Number.isFinite(v))) return null;
@@ -8316,8 +8349,8 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
         countChanged.push({name:currItems[0]?.name||key,from:prevCount,to:currCount});
       }
 
-      const oldCenter=boxCenter(prevItems[0]?.box);
-      const newCenter=boxCenter(currItems[0]?.box);
+      const oldCenter=visionObjectCenter(prevItems[0]?.box);
+      const newCenter=visionObjectCenter(currItems[0]?.box);
       if(oldCenter && newCenter){
         const dx=newCenter.x-oldCenter.x;
         const dy=newCenter.y-oldCenter.y;
@@ -8654,12 +8687,45 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
     const savedGeminiKey = localStorage.getItem('robo_gemini_api_key');
     if(savedGeminiKey) headers['x-gemini-key'] = savedGeminiKey;
 
-    const res = await fetch('/api/robo',{
-      method:'POST',
-      headers,
-      body:JSON.stringify(payload),
-      ...(signal ? {signal} : {})
-    });
+    // Mobile Cellular Latency Guard: 8.5s client abort timeout before Vercel's strict 10s limit
+    const brainTimeoutMs = 8500;
+    const timeoutController = new AbortController();
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      try { timeoutController.abort(); } catch(_) {}
+    }, brainTimeoutMs);
+
+    if (signal) {
+      if (signal.aborted) {
+        try { timeoutController.abort(); } catch(_) {}
+      } else {
+        signal.addEventListener('abort', () => {
+          try { timeoutController.abort(); } catch(_) {}
+        }, { once: true });
+      }
+    }
+
+    let res = null;
+    try {
+      res = await fetch('/api/robo',{
+        method:'POST',
+        headers,
+        body:JSON.stringify(payload),
+        signal: timeoutController.signal
+      });
+    } catch (fetchErr) {
+      clearTimeout(timer);
+      if (timedOut) {
+        devLog("AI ERROR", `AI_TIMEOUT · Brain connection timed out after ${brainTimeoutMs}ms`);
+        const err = new Error('Brain connection timed out');
+        err.code = 'AI_TIMEOUT';
+        throw err;
+      }
+      throw fetchErr;
+    } finally {
+      clearTimeout(timer);
+    }
 
     let data = null;
     try{
@@ -8923,10 +8989,10 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
       recordEpisode(`User: "${clean.slice(0, 50)}"`, 'conversation', emotion);
       conversation.push({role:'assistant',content:fallback});
       while(conversation.length>MAX_HISTORY) conversation.shift();
-      if(devAI) devAI.textContent=err.code==='AI_NOT_CONFIGURED'?'NOT CONNECTED · LOCAL FALLBACK':'AI ERROR · LOCAL FALLBACK';
+      if(devAI) devAI.textContent=err.code==='AI_NOT_CONFIGURED'?'NOT CONNECTED · LOCAL FALLBACK':(err.code==='AI_TIMEOUT'?'TIMEOUT · LOCAL FALLBACK':'AI ERROR · LOCAL FALLBACK');
       if(devStage) devStage.textContent='LOCAL FALLBACK';
-      devLog("BRAIN","local fallback response after AI failure");
-      setVoiceStatus(err.code==='AI_NOT_CONFIGURED'?'LOCAL FALLBACK · AI key not configured':'LOCAL FALLBACK · AI unavailable');
+      devLog("BRAIN",err.code==='AI_TIMEOUT'?"local fallback response after brain timeout":"local fallback response after AI failure");
+      setVoiceStatus(err.code==='AI_NOT_CONFIGURED'?'LOCAL FALLBACK · AI key not configured':(err.code==='AI_TIMEOUT'?'LOCAL FALLBACK · Brain connection timed out':'LOCAL FALLBACK · AI unavailable'));
       setState(emotion,emotion+' · local fallback',{intensity:emotionResult.intensity,confidence:emotionResult.confidence});
       speak(fallback,languageHint);
     }finally{
@@ -10129,6 +10195,17 @@ function hookRecognitionDiagnostics(r){
       }
       const url = `ws://${this.ip}:${this.port}/ws`;
       devLog('CHASSIS', `Connecting ESP32 WebSocket: ${url}`);
+
+      // Browser Mixed Content Security Check: Chrome blocks ws:// on HTTPS
+      const isHttps = typeof window !== 'undefined' && window.location && window.location.protocol === 'https:';
+      const isCapacitor = typeof window !== 'undefined' && (window.Capacitor?.isNativePlatform?.() || window.location?.protocol === 'capacitor:');
+      if (isHttps && !isCapacitor && !url.startsWith('wss:')) {
+        devLog('CHASSIS WARN', 'Mixed Content Security: Chrome blocks insecure ws:// on HTTPS. Run via HTTP/localhost or compile standalone Android APK via Capacitor for hardware motors.');
+        this.mixedContentBlocked = true;
+      } else {
+        this.mixedContentBlocked = false;
+      }
+
       try {
         this.ws = new WebSocket(url);
         this.ws.onopen = () => {
@@ -10281,12 +10358,15 @@ function hookRecognitionDiagnostics(r){
 
       const transportText = $('#chassisTransportText');
       if (transportText) {
-        const modeLabel = this.mode === 'virtual'
+        const isHttps = typeof window !== 'undefined' && window.location && window.location.protocol === 'https:';
+        const isCapacitor = typeof window !== 'undefined' && (window.Capacitor?.isNativePlatform?.() || window.location?.protocol === 'capacitor:');
+        let modeLabel = this.mode === 'virtual'
           ? 'Virtual Simulator (Active)'
           : this.mode === 'wifi'
-            ? `ESP32 Wi-Fi (${this.wifi.connected ? 'Connected' : 'Offline'})`
+            ? `ESP32 Wi-Fi (${this.wifi.connected ? 'Connected' : (this.wifi.mixedContentBlocked ? 'Blocked on HTTPS · use APK/HTTP' : 'Offline')})`
             : `ESP32 BLE (${this.ble.connected ? 'Connected' : 'Offline'})`;
         transportText.textContent = `Transport: ${modeLabel}`;
+        transportText.style.color = (this.mode === 'wifi' && this.wifi.mixedContentBlocked && !this.wifi.connected) ? '#ff9a78' : '';
       }
 
       const motorText = $('#motorPwmText');
