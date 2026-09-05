@@ -127,9 +127,9 @@ button{font:inherit}
 .visionSummary{display:none!important}
 
 /* ---------- Face Screen (Pure Black OLED) & Minimal Avatar ---------- */
-.avatarZone{position:absolute;inset:0;bottom:0;display:flex;align-items:center;justify-content:center;z-index:10;pointer-events:none}
-.orbit{position:relative;width:100%;height:100%;display:flex;align-items:center;justify-content:center}
-#face{position:relative;width:100%;height:100%;display:block;pointer-events:none}
+.avatarZone{position:absolute;inset:0;bottom:0;display:flex;align-items:center;justify-content:center;z-index:10;pointer-events:auto}
+.orbit{position:relative;width:100%;height:100%;display:flex;align-items:center;justify-content:center;pointer-events:none}
+#face{position:relative;width:100%;height:100%;display:block;pointer-events:auto;touch-action:none;cursor:pointer}
 /* Strip legacy HUD and clutter from Face screen */
 #screenFace .hud,
 #screenFace #roboBuildMarker,
@@ -816,6 +816,60 @@ button{font:inherit}
               </div>
             </section>
 
+            <!-- COZMO INTERACTIVE GAMES, ROBOTIC HANDS & VISUAL TRANSFORMATIONS -->
+            <section class="devCard" id="devInteractiveCard" style="grid-column: 1 / -1;">
+              <div class="devHeaderRow" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
+                <div class="devTitle" style="color:var(--cyan);margin-bottom:0;">COZMO INTERACTIVE GAMES & ROBOTIC GESTURES</div>
+                <span style="font-size:7.5px;padding:3px 8px;border-radius:12px;background:rgba(0,229,255,.12);color:var(--cyan);border:1px solid rgba(0,229,255,.3);">OLED ACTIVE ENGINE v2.0</span>
+              </div>
+
+              <div style="margin-bottom:10px;">
+                <span class="metricLabel" style="color:#f0b45b;font-weight:700;">5 INTERACTIVE MINI-GAMES:</span>
+                <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;">
+                  <button type="button" class="devAction" id="gameQuickTapBtn">⚡ QUICK TAP</button>
+                  <button type="button" class="devAction" id="gameRpsBtn">🪨 ROCK-PAPER-SCISSORS</button>
+                  <button type="button" class="devAction" id="gameStaringBtn">👀 STARING CONTEST</button>
+                  <button type="button" class="devAction" id="gameCodebreakerBtn">🔢 CODEBREAKER (1-10)</button>
+                  <button type="button" class="devAction" id="gameMimicBtn">🎭 FACE MIMIC</button>
+                  <button type="button" class="devAction" id="gameStopBtn" style="border-color:var(--red);color:var(--red);">⏹ STOP GAME</button>
+                </div>
+              </div>
+
+              <div style="margin-bottom:10px;">
+                <span class="metricLabel" style="color:var(--cyan);font-weight:700;">VECTOR ROBOTIC HANDS:</span>
+                <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;">
+                  <button type="button" class="devAction" id="handHighFiveBtn">✋ HIGH FIVE</button>
+                  <button type="button" class="devAction" id="handFistBumpBtn">👊 FIST BUMP</button>
+                  <button type="button" class="devAction" id="handWaveBtn">👋 WAVE</button>
+                  <button type="button" class="devAction" id="handThumbsUpBtn">👍 THUMBS UP</button>
+                  <button type="button" class="devAction" id="handPointBtn">☝️ POINT</button>
+                  <button type="button" class="devAction" id="handDismissBtn" style="border-color:rgba(255,255,255,.2);color:#8f98aa;">✕ DISMISS HAND</button>
+                </div>
+              </div>
+
+              <div style="margin-bottom:10px;">
+                <span class="metricLabel" style="color:#c084fc;font-weight:700;">ACTIVE VISUAL TRANSFORMATIONS:</span>
+                <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;">
+                  <button type="button" class="devAction" id="visEqualizerBtn">📊 AUDIO EQUALIZER</button>
+                  <button type="button" class="devAction" id="visDizzyBtn">🌀 HYPNOTIC DIZZY</button>
+                  <button type="button" class="devAction" id="visReticleBtn">🎯 CYBER HUD RETICLE</button>
+                  <button type="button" class="devAction" id="visTickleBtn">💖 TICKLE / PET</button>
+                  <button type="button" class="devAction" id="visMatrixBtn">🟩 MATRIX RAIN</button>
+                  <button type="button" class="devAction" id="visClearBtn" style="border-color:rgba(255,255,255,.2);color:#8f98aa;">✕ RESET VISUALS</button>
+                </div>
+              </div>
+
+              <div>
+                <span class="metricLabel" style="color:#55c58c;font-weight:700;">VOICE-DRIVEN AI ARTWORK GENERATOR:</span>
+                <div style="display:flex;gap:8px;align-items:center;margin-top:4px;flex-wrap:wrap;">
+                  <input type="text" id="aiArtPromptInput" placeholder="e.g. cute robot cat in cyberpunk city neon style" style="flex:1;min-width:220px;background:#0d111a;border:1px solid rgba(255,255,255,.14);border-radius:8px;color:#fff;padding:8px 12px;font-size:11px;outline:none;" />
+                  <button type="button" class="devAction" id="aiArtGenerateBtn" style="background:rgba(85,197,140,.2);border-color:var(--green);color:var(--green);font-weight:700;">🎨 DRAW ON OLED</button>
+                  <button type="button" class="devAction" id="aiArtDismissBtn" style="border-color:rgba(255,255,255,.2);color:#8f98aa;">✕ CLEAR ART</button>
+                </div>
+                <div class="metricSub" style="margin-top:4px;">Voice trigger: Say <b>"Max, draw [prompt]"</b> or <b>"Generate an image of [prompt]"</b></div>
+              </div>
+            </section>
+
             <!-- CLOUD AI & API KEYS CONFIGURATION -->
             <section class="devCard" style="grid-column: 1 / -1;">
               <div class="devHeaderRow" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
@@ -1006,6 +1060,7 @@ button{font:inherit}
   let robotConnectionManager = null;
   let robotActionEngine = null;
   let autonomousPlanner = null;
+  let cozmoInteractiveEngine = null;
 
   const STATES = [
     "neutral","happy","curious","sleepy","listening","thinking","talking",
@@ -5385,32 +5440,47 @@ button{font:inherit}
 
       const cr = ew * 0.12;
 
-      ctx.save();
-      // Apply overall head tilt (for curious/confused states)
-      ctx.translate(cx, cy);
-      ctx.rotate(tilt);
-      ctx.translate(-cx, -cy);
+      let suppressFace = false;
+      if (typeof cozmoInteractiveEngine !== 'undefined' && cozmoInteractiveEngine) {
+        suppressFace = cozmoInteractiveEngine.preRender(ctx, cw, ch, dt, { cx, cy, ew, ehBase, isLandscape, t, gazeX, gazeY });
+      }
 
-      // Electric glowing cyan color & glow
-      ctx.shadowColor = `rgba(0, 229, 255, ${0.40 + glow * 0.35})`;
-      ctx.shadowBlur = Math.round(ew * (0.16 + glow * 0.14));
-      ctx.fillStyle = '#00e5ff';
+      if (!suppressFace) {
+        ctx.save();
+        // Apply overall head tilt (for curious/confused states)
+        ctx.translate(cx, cy);
+        ctx.rotate(tilt);
+        ctx.translate(-cx, -cy);
 
-      // Left Eye (-1) and Right Eye (+1) with dynamic gaze tracking
-      const eyeOffset = eyeGap / 2 + ew / 2;
-      [-1, 1].forEach(side => {
-        const ex = cx + side * eyeOffset;
-        const browSlant = brow * 0.45;
-        // When curious, apply subtle asymmetric focus (inquisitive head cock & eye focus)
-        const curiousTiltEye = isCurious ? (side < 0 ? 1.05 : 0.95) : 1.0;
-        const eh = Math.max(ew * 0.08, ehBase * eyeOpen * curiousTiltEye * (1 - blinkAmount * 0.94));
-        drawDomeEye(ctx, ex, cy, ew, eh, cr, browSlant, happyBlend, side, gazeX, gazeY);
-      });
+        // Electric glowing cyan color & glow
+        ctx.shadowColor = `rgba(0, 229, 255, ${0.40 + glow * 0.35})`;
+        ctx.shadowBlur = Math.round(ew * (0.16 + glow * 0.14));
+        ctx.fillStyle = '#00e5ff';
 
-      // Mouth: glowing pill below eyes with continuous smooth morphing
-      drawMouth(ctx, cx, mouthY, mouthW, mouthH, mouth, talkOpen, smileBlend, sadBlend, surpriseBlend);
+        // Left Eye (-1) and Right Eye (+1) with dynamic gaze tracking
+        const eyeOffset = eyeGap / 2 + ew / 2;
+        [-1, 1].forEach(side => {
+          const ex = cx + side * eyeOffset;
+          let browSlant = brow * 0.45;
+          if (typeof cozmoInteractiveEngine !== 'undefined' && cozmoInteractiveEngine?.activeGame === 'staring') {
+            browSlant += Math.sin(t * 9 + (side * 1.2)) * 0.35;
+          }
+          // When curious, apply subtle asymmetric focus (inquisitive head cock & eye focus)
+          const curiousTiltEye = isCurious ? (side < 0 ? 1.05 : 0.95) : 1.0;
+          const currentBlink = (typeof cozmoInteractiveEngine !== 'undefined' && cozmoInteractiveEngine?.activeGame === 'staring') ? 0 : blinkAmount;
+          const eh = Math.max(ew * 0.08, ehBase * eyeOpen * curiousTiltEye * (1 - currentBlink * 0.94));
+          drawDomeEye(ctx, ex, cy, ew, eh, cr, browSlant, happyBlend, side, gazeX, gazeY);
+        });
 
-      ctx.restore();
+        // Mouth: glowing pill below eyes with continuous smooth morphing
+        drawMouth(ctx, cx, mouthY, mouthW, mouthH, mouth, talkOpen, smileBlend, sadBlend, surpriseBlend);
+
+        ctx.restore();
+      }
+
+      if (typeof cozmoInteractiveEngine !== 'undefined' && cozmoInteractiveEngine) {
+        cozmoInteractiveEngine.postRender(ctx, cw, ch, dt, { cx, cy, ew, ehBase, isLandscape, t, gazeX, gazeY });
+      }
 
       const fallback = $('#emojiFallback');
       if(fallback) fallback.classList.add('hidden');
@@ -5898,6 +5968,155 @@ button{font:inherit}
       osc2.start(now + 0.05);
       osc2.stop(now + 0.10);
       this.registerNode(osc2);
+    }
+
+    playSlap() {
+      if (!this.enabled) return;
+      const ctx = this.initContext();
+      if (!ctx) return;
+      this.updateUI('slap');
+      const now = ctx.currentTime;
+      try {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(360, now);
+        osc.frequency.exponentialRampToValueAtTime(45, now + 0.12);
+        gain.gain.setValueAtTime(0.7 * this.volume, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+        osc.connect(gain);
+        gain.connect(this.masterGain);
+        osc.start(now);
+        osc.stop(now + 0.12);
+        this.registerNode(osc);
+
+        const bufferSize = Math.floor(ctx.sampleRate * 0.08);
+        const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+        const output = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+          output[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.2));
+        }
+        const noise = ctx.createBufferSource();
+        noise.buffer = buffer;
+        const noiseGain = ctx.createGain();
+        noiseGain.gain.setValueAtTime(0.5 * this.volume, now);
+        noiseGain.gain.exponentialRampToValueAtTime(0.01, now + 0.08);
+        noise.connect(noiseGain);
+        noiseGain.connect(this.masterGain);
+        noise.start(now);
+        this.registerNode(noise);
+      } catch (_) {}
+    }
+
+    playDing() {
+      if (!this.enabled) return;
+      const ctx = this.initContext();
+      if (!ctx) return;
+      this.updateUI('ding');
+      const now = ctx.currentTime;
+      try {
+        [1046.5, 1318.5].forEach((freq, i) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(freq, now + i * 0.03);
+          gain.gain.setValueAtTime(0.35 * this.volume, now + i * 0.03);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.03 + 0.35);
+          osc.connect(gain);
+          gain.connect(this.masterGain);
+          osc.start(now + i * 0.03);
+          osc.stop(now + i * 0.03 + 0.35);
+          this.registerNode(osc);
+        });
+      } catch (_) {}
+    }
+
+    playBuzzer() {
+      if (!this.enabled) return;
+      const ctx = this.initContext();
+      if (!ctx) return;
+      this.updateUI('buzzer');
+      const now = ctx.currentTime;
+      try {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(130, now);
+        osc.frequency.setValueAtTime(110, now + 0.1);
+        gain.gain.setValueAtTime(0.3 * this.volume, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
+        osc.connect(gain);
+        gain.connect(this.masterGain);
+        osc.start(now);
+        osc.stop(now + 0.25);
+        this.registerNode(osc);
+      } catch (_) {}
+    }
+
+    playCheer() {
+      if (!this.enabled) return;
+      const ctx = this.initContext();
+      if (!ctx) return;
+      this.updateUI('cheer');
+      const now = ctx.currentTime;
+      try {
+        const notes = [523.25, 659.25, 783.99, 1046.5];
+        notes.forEach((freq, i) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(freq, now + i * 0.08);
+          gain.gain.setValueAtTime(0.35 * this.volume, now + i * 0.08);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.08 + 0.32);
+          osc.connect(gain);
+          gain.connect(this.masterGain);
+          osc.start(now + i * 0.08);
+          osc.stop(now + i * 0.08 + 0.32);
+          this.registerNode(osc);
+        });
+      } catch (_) {}
+    }
+
+    playTantrum() {
+      if (!this.enabled) return;
+      const ctx = this.initContext();
+      if (!ctx) return;
+      this.updateUI('tantrum');
+      const now = ctx.currentTime;
+      try {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(180, now);
+        osc.frequency.linearRampToValueAtTime(70, now + 0.3);
+        gain.gain.setValueAtTime(0.3 * this.volume, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+        osc.connect(gain);
+        gain.connect(this.masterGain);
+        osc.start(now);
+        osc.stop(now + 0.3);
+        this.registerNode(osc);
+      } catch (_) {}
+    }
+
+    playTick() {
+      if (!this.enabled) return;
+      const ctx = this.initContext();
+      if (!ctx) return;
+      const now = ctx.currentTime;
+      try {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(880, now);
+        gain.gain.setValueAtTime(0.2 * this.volume, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.04);
+        osc.connect(gain);
+        gain.connect(this.masterGain);
+        osc.start(now);
+        osc.stop(now + 0.04);
+        this.registerNode(osc);
+      } catch (_) {}
     }
 
     // Trigger procedural sound by identifier
@@ -10733,7 +10952,1667 @@ function hookRecognitionDiagnostics(r){
         return { handled: true, type: 'celebrate', reply: "Woohoo! We did it!", emotion: 'love' };
       }
 
+      // Cozmo Interactive Suite Voice Routing
+      if (typeof cozmoInteractiveEngine !== 'undefined' && cozmoInteractiveEngine) {
+        // High five
+        if (/\b(high five|high-five|gimme five|give me a high five|taali)\b/.test(l)) {
+          cozmoInteractiveEngine.showHand('high_five');
+          return { handled: true, type: 'high_five', reply: "High five! Slap my hand on screen!", emotion: 'excited' };
+        }
+
+        // Fist bump
+        if (/\b(fist bump|fist-bump|bump it|give me a fist bump)\b/.test(l)) {
+          cozmoInteractiveEngine.showHand('fist_bump');
+          return { handled: true, type: 'fist_bump', reply: "Fist bump! Bump my knuckles on screen!", emotion: 'excited' };
+        }
+
+        // Wave hand
+        if (/\b(wave|wave hand|say hi|say hello|alvida|bye bye)\b/.test(l)) {
+          cozmoInteractiveEngine.showHand('wave');
+          return { handled: true, type: 'wave', reply: "Hello there, friend! *waves*", emotion: 'happy' };
+        }
+
+        // Thumbs up
+        if (/\b(thumbs up|good job|well done|shabash)\b/.test(l)) {
+          cozmoInteractiveEngine.showHand('thumbs_up');
+          return { handled: true, type: 'thumbs_up', reply: "Thumbs up! You're awesome!", emotion: 'happy' };
+        }
+
+        // Point
+        if (/\b(point|point at me|look there|ishara)\b/.test(l)) {
+          cozmoInteractiveEngine.showHand('point');
+          return { handled: true, type: 'point', reply: "Pointing right over there!", emotion: 'curious' };
+        }
+
+        // In-game dynamic responses (RPS choices & Codebreaker numbers)
+        if (cozmoInteractiveEngine.activeGame === 'rps' && cozmoInteractiveEngine.gameState?.stage === 'choose') {
+          if (/\b(rock|stone|patthar)\b/.test(l)) {
+            cozmoInteractiveEngine.playRPSChoice('rock');
+            return { handled: true, type: 'rps_choice', reply: "You picked Rock!", emotion: 'alert' };
+          }
+          if (/\b(paper|kaagaz)\b/.test(l)) {
+            cozmoInteractiveEngine.playRPSChoice('paper');
+            return { handled: true, type: 'rps_choice', reply: "You picked Paper!", emotion: 'alert' };
+          }
+          if (/\b(scissors|scissor|kainchi)\b/.test(l)) {
+            cozmoInteractiveEngine.playRPSChoice('scissors');
+            return { handled: true, type: 'rps_choice', reply: "You picked Scissors!", emotion: 'alert' };
+          }
+        }
+
+        if (cozmoInteractiveEngine.activeGame === 'codebreaker' && !cozmoInteractiveEngine.gameState?.solved) {
+          const numMatch = l.match(/\b(10|[1-9])\b/);
+          if (numMatch) {
+            const num = parseInt(numMatch[1], 10);
+            const res = cozmoInteractiveEngine.guessCodebreaker(num);
+            return { handled: true, type: 'codebreaker_guess', reply: res.reply, emotion: res.emotion };
+          }
+        }
+
+        // Mini-Games activation
+        if (/\b(quick tap|tap reflex|reflex game|speed tap|tap game)\b/.test(l)) {
+          cozmoInteractiveEngine.startGame('quick_tap');
+          return { handled: true, type: 'game_quick_tap', reply: "Quick Tap! Wait for the green flash, then tap fast!", emotion: 'alert' };
+        }
+
+        if (/\b(rock paper scissors|stone paper scissors|play rps|rock paper scissor)\b/.test(l)) {
+          cozmoInteractiveEngine.startGame('rps');
+          return { handled: true, type: 'game_rps', reply: "Rock Paper Scissors! Ready... three... two... one... shoot!", emotion: 'excited' };
+        }
+
+        if (/\b(staring contest|don't blink|dont blink|eye contact contest)\b/.test(l)) {
+          cozmoInteractiveEngine.startGame('staring');
+          return { handled: true, type: 'game_staring', reply: "Staring contest! Don't you dare blink!", emotion: 'alert' };
+        }
+
+        if (/\b(codebreaker|guess my number|guess the number|number game)\b/.test(l)) {
+          cozmoInteractiveEngine.startGame('codebreaker');
+          return { handled: true, type: 'game_codebreaker', reply: "I'm thinking of a number from 1 to 10. Can you guess it?", emotion: 'curious' };
+        }
+
+        if (/\b(face mimic|simon says|mimic game|copy my face)\b/.test(l)) {
+          cozmoInteractiveEngine.startGame('face_mimic');
+          return { handled: true, type: 'game_face_mimic', reply: "Simon Says Face Mimic! Copy my facial expressions!", emotion: 'excited' };
+        }
+
+        // Visual Transformations
+        if (/\b(equalizer|audio visualizer|music visualizer|dance mode)\b/.test(l)) {
+          cozmoInteractiveEngine.setVisualMode('equalizer');
+          return { handled: true, type: 'vis_equalizer', reply: "Audio Equalizer mode activated! Pump up the beats!", emotion: 'excited' };
+        }
+
+        if (/\b(get dizzy|dizzy eyes|spin your eyes|hypnotize|hypnotic)\b/.test(l)) {
+          cozmoInteractiveEngine.setVisualMode('dizzy');
+          return { handled: true, type: 'vis_dizzy', reply: "Whoaaa... everything is spinning! I'm dizzy!", emotion: 'confused' };
+        }
+
+        if (/\b(cyber hud|targeting mode|hud reticle|target lock|scan mode)\b/.test(l)) {
+          cozmoInteractiveEngine.setVisualMode('reticle');
+          return { handled: true, type: 'vis_reticle', reply: "Tactical cyber HUD reticle engaged. Scanning targets.", emotion: 'alert' };
+        }
+
+        if (/\b(matrix rain|cyberpunk rain|digital rain|hacker mode)\b/.test(l)) {
+          cozmoInteractiveEngine.setVisualMode('matrix');
+          return { handled: true, type: 'vis_matrix', reply: "Entering the Matrix! Digital neural rain active.", emotion: 'curious' };
+        }
+
+        if (/\b(tickle|pet you|good robot|good boy)\b/.test(l)) {
+          cozmoInteractiveEngine.setVisualMode('tickle');
+          return { handled: true, type: 'vis_tickle', reply: "Hehe! Rub or stroke my face on the screen to pet me!", emotion: 'love' };
+        }
+
+        // Voice-Driven AI Image Generation
+        const drawMatch = l.match(/\b(?:draw|paint|sketch|generate an? image of|create an? image of|picture of)\s+(.+)/i);
+        if (drawMatch && drawMatch[1]) {
+          const artPrompt = drawMatch[1].trim();
+          if (artPrompt.length > 2 && !/\b(graph|table|circle|rectangle)\b/.test(artPrompt)) {
+            cozmoInteractiveEngine.generateAndDisplayArt(artPrompt);
+            return { handled: true, type: 'ai_art', reply: `Synthesizing neural visual: "${artPrompt}"! Standby for OLED feed!`, emotion: 'thinking' };
+          }
+        }
+      }
+
       return null;
+    }
+  }
+
+  /* =========================================================================
+   * MODULE 12: COZMO INTERACTIVE ENGINE, ROBOTIC GESTURES & AI ART
+   * ========================================================================= */
+
+  class InteractiveParticleSystem {
+    constructor() {
+      this.particles = [];
+      this.shockwaves = [];
+      this.matrixStreams = [];
+    }
+
+    emitSparks(x, y, color = '#00e5ff', count = 25) {
+      for (let i = 0; i < count; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = 2 + Math.random() * 8;
+        this.particles.push({
+          x, y,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed - 1,
+          size: 2 + Math.random() * 3,
+          color,
+          alpha: 1,
+          decay: 0.02 + Math.random() * 0.03,
+          type: 'spark'
+        });
+      }
+    }
+
+    emitShockwave(x, y, color = '#00e5ff', maxR = 90) {
+      this.shockwaves.push({
+        x, y,
+        radius: 8,
+        maxRadius: maxR,
+        color,
+        alpha: 0.9,
+        growRate: (maxR - 8) / 18
+      });
+    }
+
+    emitHearts(x, y, count = 5) {
+      for (let i = 0; i < count; i++) {
+        this.particles.push({
+          x: x + (Math.random() - 0.5) * 40,
+          y: y + (Math.random() - 0.5) * 20,
+          vx: (Math.random() - 0.5) * 1.5,
+          vy: -(1.5 + Math.random() * 2.5),
+          size: 14 + Math.random() * 10,
+          color: '#ff69b4',
+          alpha: 1,
+          decay: 0.015,
+          type: 'heart',
+          phase: Math.random() * Math.PI * 2
+        });
+      }
+    }
+
+    emitConfetti(x, y, count = 40) {
+      const colors = ['#00e5ff', '#ff7654', '#55c58c', '#f0b45b', '#c084fc', '#ef7fae'];
+      for (let i = 0; i < count; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = 3 + Math.random() * 9;
+        this.particles.push({
+          x, y,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed - 4,
+          gravity: 0.18,
+          w: 4 + Math.random() * 5,
+          h: 6 + Math.random() * 7,
+          color: colors[Math.floor(Math.random() * colors.length)],
+          rotation: Math.random() * Math.PI * 2,
+          rotSpeed: (Math.random() - 0.5) * 0.25,
+          alpha: 1,
+          decay: 0.012,
+          type: 'confetti'
+        });
+      }
+    }
+
+    initMatrixRain(cw, ch) {
+      const colWidth = 22;
+      const numCols = Math.floor(cw / colWidth);
+      const chars = '0123456789ABCDEFｦｱｳｴｵｶｷｹｺｻｼｽｾｿﾀﾂﾃﾅﾆﾇﾈﾊﾋﾎﾏﾐﾑﾒﾓﾔﾕﾗﾘﾜ';
+      this.matrixStreams = [];
+      for (let i = 0; i < numCols; i++) {
+        this.matrixStreams.push({
+          x: i * colWidth + 11,
+          y: Math.random() * -ch,
+          speed: 4 + Math.random() * 6,
+          chars: Array.from({ length: 14 }, () => chars[Math.floor(Math.random() * chars.length)]),
+          leadChar: chars[Math.floor(Math.random() * chars.length)],
+          changeTimer: 0
+        });
+      }
+    }
+
+    renderMatrixRain(ctx, cw, ch, dt) {
+      if (!this.matrixStreams.length) {
+        this.initMatrixRain(cw, ch);
+      }
+      ctx.save();
+      ctx.font = '12px monospace';
+      ctx.textAlign = 'center';
+      const chars = '0123456789ABCDEFｦｱｳｴｵｶｷｹｺｻｼｽｾｿﾀﾂﾃﾅﾆﾇﾈﾊﾋﾎﾏﾐﾑﾒﾓﾔﾕﾗﾘﾜ';
+      for (const s of this.matrixStreams) {
+        s.y += s.speed * (dt / 16);
+        if (s.y - 14 * 16 > ch) {
+          s.y = Math.random() * -60;
+          s.speed = 4 + Math.random() * 6;
+        }
+        s.changeTimer += dt;
+        if (s.changeTimer > 80) {
+          s.changeTimer = 0;
+          s.leadChar = chars[Math.floor(Math.random() * chars.length)];
+        }
+        for (let j = 0; j < s.chars.length; j++) {
+          const cy = s.y - j * 16;
+          if (cy < -10 || cy > ch + 10) continue;
+          const alpha = Math.max(0, 1 - j / s.chars.length);
+          if (j === 0) {
+            ctx.fillStyle = `rgba(220, 255, 230, ${alpha * 0.95})`;
+            ctx.fillText(s.leadChar, s.x, cy);
+          } else {
+            ctx.fillStyle = `rgba(30, 220, 110, ${alpha * 0.75})`;
+            ctx.fillText(s.chars[j], s.x, cy);
+          }
+        }
+      }
+      ctx.restore();
+    }
+
+    clear() {
+      this.particles = [];
+      this.shockwaves = [];
+    }
+
+    updateAndRender(ctx, dt) {
+      for (let i = this.shockwaves.length - 1; i >= 0; i--) {
+        const sw = this.shockwaves[i];
+        sw.radius += sw.growRate * (dt / 16);
+        sw.alpha -= 0.04 * (dt / 16);
+        if (sw.alpha <= 0 || sw.radius >= sw.maxRadius) {
+          this.shockwaves.splice(i, 1);
+          continue;
+        }
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(sw.x, sw.y, sw.radius, 0, Math.PI * 2);
+        ctx.strokeStyle = sw.color;
+        ctx.globalAlpha = Math.max(0, sw.alpha);
+        ctx.lineWidth = 3;
+        ctx.shadowColor = sw.color;
+        ctx.shadowBlur = 10;
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      for (let i = this.particles.length - 1; i >= 0; i--) {
+        const p = this.particles[i];
+        p.x += (p.vx || 0) * (dt / 16);
+        p.y += (p.vy || 0) * (dt / 16);
+        if (p.gravity) p.vy += p.gravity * (dt / 16);
+        p.alpha -= (p.decay || 0.02) * (dt / 16);
+
+        if (p.alpha <= 0) {
+          this.particles.splice(i, 1);
+          continue;
+        }
+
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, p.alpha);
+
+        if (p.type === 'spark') {
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+          ctx.fillStyle = p.color;
+          ctx.shadowColor = p.color;
+          ctx.shadowBlur = 8;
+          ctx.fill();
+        } else if (p.type === 'heart') {
+          p.phase += 0.08;
+          const hx = p.x + Math.sin(p.phase) * 6;
+          ctx.fillStyle = p.color;
+          ctx.shadowColor = p.color;
+          ctx.shadowBlur = 8;
+          ctx.font = `${Math.round(p.size)}px sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('💖', hx, p.y);
+        } else if (p.type === 'confetti') {
+          p.rotation += p.rotSpeed || 0.1;
+          ctx.translate(p.x, p.y);
+          ctx.rotate(p.rotation);
+          ctx.fillStyle = p.color;
+          ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+        }
+
+        ctx.restore();
+      }
+    }
+  }
+
+  class CozmoInteractiveEngine {
+    constructor() {
+      this.sound = typeof cozmoSoundEngine !== 'undefined' ? cozmoSoundEngine : new CozmoSoundEngine();
+      this.particles = new InteractiveParticleSystem();
+
+      this.activeHand = null; // 'high_five' | 'fist_bump' | 'wave' | 'thumbs_up' | 'point'
+      this.handState = {
+        x: 0,
+        y: 0,
+        recoilProgress: 0,
+        t: 0,
+        slapCount: 0
+      };
+
+      this.activeGame = null; // 'quick_tap' | 'rps' | 'staring' | 'codebreaker' | 'face_mimic'
+      this.gameState = {};
+
+      this.activeVisualMode = null; // 'equalizer' | 'dizzy' | 'reticle' | 'tickle' | 'matrix'
+      this.visualState = {
+        timer: 0,
+        dizzyAngle: 0,
+        eqPeaks: new Array(16).fill(0),
+        eqValues: new Array(16).fill(0),
+        reticleAngle: 0
+      };
+
+      this.activeArt = null; // { status: 'generating'|'loaded'|'error', prompt, imageUrl, img, loadedAt }
+      this.tickleTracker = {
+        lastX: 0,
+        lastY: 0,
+        strokeDist: 0,
+        lastStrokeTime: 0,
+        happyTimer: 0
+      };
+
+      this.canvasBounds = { width: 450, height: 450 };
+      this.activeButtons = []; // Dynamic clickable bounds on canvas: { id, x, y, w, h, onClick }
+    }
+
+    attachCanvas(canvasElement) {
+      if (!canvasElement) return;
+      canvasElement.addEventListener('pointerdown', (e) => {
+        const r = canvasElement.getBoundingClientRect();
+        this.handlePointerDown(e.clientX - r.left, e.clientY - r.top, r.width, r.height);
+      });
+      canvasElement.addEventListener('pointermove', (e) => {
+        const r = canvasElement.getBoundingClientRect();
+        this.handlePointerMove(e.clientX - r.left, e.clientY - r.top, r.width, r.height, e.buttons === 1);
+      });
+      canvasElement.addEventListener('pointerup', () => {
+        this.handlePointerUp();
+      });
+    }
+
+    // ==========================================
+    // ROBOTIC HANDS CONTROLS
+    // ==========================================
+    showHand(type) {
+      this.activeHand = type;
+      this.handState = { x: 0, y: 0, recoilProgress: 0, t: 0, slapCount: 0 };
+      this.sound.playDing();
+      showCaption('MAX GESTURE\n' + type.toUpperCase().replace('_', ' '), true);
+    }
+
+    dismissHand() {
+      this.activeHand = null;
+    }
+
+    // ==========================================
+    // MINI GAMES CONTROLS
+    // ==========================================
+    startGame(gameName) {
+      this.stopGame();
+      this.activeGame = gameName;
+      this.sound.playDing();
+
+      if (gameName === 'quick_tap') {
+        this.gameState = {
+          stage: 'wait',
+          waitTimer: 1500 + Math.random() * 2200,
+          flashStart: 0,
+          reactionMs: 0,
+          resultRank: '',
+          timer: 0
+        };
+        showCaption('QUICK TAP REFLEX\nWait for the green light, then tap instantly!', true);
+        speak("Quick tap! Watch the screen and tap the exact second it turns green!");
+      } else if (gameName === 'rps') {
+        this.gameState = {
+          stage: 'countdown',
+          countdownSec: 3,
+          timer: 0,
+          playerChoice: null,
+          maxChoice: null,
+          outcome: null
+        };
+        showCaption('ROCK PAPER SCISSORS\nReady... 3... 2... 1... shoot!', true);
+        speak("Rock Paper Scissors! Ready... three... two... one... shoot!");
+      } else if (gameName === 'staring') {
+        this.gameState = {
+          startTime: performance.now(),
+          elapsed: 0,
+          playerLost: false,
+          playerWon: false,
+          wiggleOffset: 0
+        };
+        showCaption("STARING CONTEST\nDon't blink or look away! First to blink loses!", true);
+        speak("Staring contest! Stare right into my eyes and don't you dare blink!");
+      } else if (gameName === 'codebreaker') {
+        const secret = Math.floor(Math.random() * 10) + 1;
+        this.gameState = {
+          secret,
+          lastGuess: null,
+          hint: 'GUESS A NUMBER FROM 1 TO 10',
+          attempts: 0,
+          solved: false
+        };
+        showCaption("CODEBREAKER (1 - 10)\nI'm thinking of a number 1 to 10. Can you guess it?", true);
+        speak("I'm thinking of a number from 1 to 10. Tap your guess on the screen!");
+      } else if (gameName === 'face_mimic') {
+        const challenges = ['happy', 'surprised', 'angry', 'sleepy'];
+        const target = challenges[Math.floor(Math.random() * challenges.length)];
+        this.gameState = {
+          target,
+          timer: 6000,
+          solved: false
+        };
+        setState(target, 'simon says · ' + target);
+        showCaption(`SIMON SAYS FACE MIMIC\nMake a ${target.toUpperCase()} face! Tap DONE when ready.`, true);
+        speak(`Simon says: Make a ${target} face!`);
+      }
+    }
+
+    stopGame() {
+      this.activeGame = null;
+      this.gameState = {};
+    }
+
+    playRPSChoice(playerChoice) {
+      if (!this.gameState || this.activeGame !== 'rps') return;
+      const choices = ['rock', 'paper', 'scissors'];
+      const maxChoice = choices[Math.floor(Math.random() * choices.length)];
+      this.gameState.playerChoice = playerChoice;
+      this.gameState.maxChoice = maxChoice;
+      this.gameState.stage = 'reveal';
+
+      let outcome = 'tie';
+      if (playerChoice === maxChoice) {
+        outcome = 'tie';
+      } else if (
+        (playerChoice === 'rock' && maxChoice === 'scissors') ||
+        (playerChoice === 'paper' && maxChoice === 'rock') ||
+        (playerChoice === 'scissors' && maxChoice === 'paper')
+      ) {
+        outcome = 'win';
+      } else {
+        outcome = 'lose';
+      }
+
+      this.gameState.outcome = outcome;
+
+      if (outcome === 'win') {
+        this.sound.playCheer();
+        this.particles.emitConfetti(this.canvasBounds.width / 2, this.canvasBounds.height / 2, 35);
+        setState('surprised', 'lost rps round');
+        showCaption(`YOU WIN!\nYour ${playerChoice.toUpperCase()} beats Max's ${maxChoice.toUpperCase()}!`, true);
+        speak(`You won! Your ${playerChoice} beats my ${maxChoice}! Nicely done!`);
+      } else if (outcome === 'lose') {
+        this.sound.playDing();
+        setState('happy', 'won rps round');
+        showCaption(`MAX WINS!\nMax's ${maxChoice.toUpperCase()} beats your ${playerChoice.toUpperCase()}!`, true);
+        speak(`Aha! My ${maxChoice} beats your ${playerChoice}! I win!`);
+      } else {
+        this.sound.playDing();
+        setState('excited', 'tied rps round');
+        showCaption(`TIE GAME!\nBoth chose ${playerChoice.toUpperCase()}! Great minds think alike!`, true);
+        speak(`We both chose ${playerChoice}! It's a tie!`);
+      }
+
+      setTimeout(() => {
+        if (this.activeGame === 'rps' && this.gameState?.stage === 'reveal') {
+          this.gameState.stage = 'choose';
+        }
+      }, 3500);
+    }
+
+    guessCodebreaker(guess) {
+      if (!this.gameState || this.activeGame !== 'codebreaker' || this.gameState.solved) {
+        return { reply: "Codebreaker is not active.", emotion: 'curious' };
+      }
+      this.gameState.attempts++;
+      this.gameState.lastGuess = guess;
+      const secret = this.gameState.secret;
+
+      if (guess === secret) {
+        this.gameState.solved = true;
+        this.sound.playCheer();
+        this.particles.emitConfetti(this.canvasBounds.width / 2, this.canvasBounds.height / 2, 40);
+        setState('excited', 'code cracked');
+        const reply = `Bingo! You cracked the code! The secret number was ${secret}! In ${this.gameState.attempts} tries!`;
+        this.gameState.hint = `BINGO! THE CODE WAS ${secret}!`;
+        showCaption(`CODE CRACKED!\n${secret} was correct in ${this.gameState.attempts} attempts!`, true);
+        speak(reply);
+        return { reply, emotion: 'excited' };
+      } else if (guess < secret) {
+        this.sound.playDing();
+        this.gameState.hint = `HIGHER! ▲ (Guessed: ${guess})`;
+        setState('curious', 'code guess higher');
+        const reply = `Higher than ${guess}! Try higher!`;
+        showCaption(`HIGHER! ▲\nSecret is higher than ${guess}`, true);
+        speak(reply);
+        return { reply, emotion: 'curious' };
+      } else {
+        this.sound.playBuzzer();
+        this.gameState.hint = `LOWER! ▼ (Guessed: ${guess})`;
+        setState('thinking', 'code guess lower');
+        const reply = `Lower than ${guess}! Try lower!`;
+        showCaption(`LOWER! ▼\nSecret is lower than ${guess}`, true);
+        speak(reply);
+        return { reply, emotion: 'thinking' };
+      }
+    }
+
+    // ==========================================
+    // VISUAL TRANSFORMATIONS
+    // ==========================================
+    setVisualMode(mode) {
+      this.activeVisualMode = mode;
+      this.visualState.timer = 0;
+      if (mode) {
+        this.sound.playDing();
+        showCaption('MAX VISUAL MODE\n' + mode.toUpperCase(), true);
+      }
+    }
+
+    // ==========================================
+    // AI ART GENERATOR ON OLED
+    // ==========================================
+    generateAndDisplayArt(prompt) {
+      const cleanPrompt = String(prompt || '').trim();
+      if (!cleanPrompt) return;
+
+      this.activeArt = {
+        status: 'generating',
+        prompt: cleanPrompt,
+        progress: 0
+      };
+
+      showCaption(`GENERATING ARTWORK:\n"${cleanPrompt}"...`, true);
+      speak(`Synthesizing visual artwork: ${cleanPrompt}. Standby for OLED canvas display!`);
+
+      if (typeof switchScreen === 'function') {
+        switchScreen('face');
+      }
+
+      fetch('/api/robo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ generateImage: true, prompt: cleanPrompt })
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.ok && data.imageUrl) {
+          const img = new Image();
+          img.crossOrigin = 'anonymous';
+          img.onload = () => {
+            this.activeArt = {
+              status: 'loaded',
+              prompt: data.prompt || cleanPrompt,
+              imageUrl: data.imageUrl,
+              img,
+              fadeAlpha: 0,
+              loadedAt: performance.now()
+            };
+            this.sound.playCheer();
+            this.particles.emitConfetti(this.canvasBounds.width / 2, this.canvasBounds.height / 2, 40);
+            showCaption(`MAX ARTIST\n"${data.prompt || cleanPrompt}"`, true);
+            speak(`Here is what I drew for you: ${data.prompt || cleanPrompt}!`);
+          };
+          img.onerror = () => {
+            this.activeArt = {
+              status: 'loaded',
+              prompt: data.prompt || cleanPrompt,
+              imageUrl: data.imageUrl,
+              img,
+              fadeAlpha: 0,
+              loadedAt: performance.now()
+            };
+          };
+          img.src = data.imageUrl;
+        } else {
+          throw new Error(data.error || 'Image generation failed');
+        }
+      })
+      .catch(err => {
+        console.warn('AI Art generation error:', err);
+        this.activeArt = { status: 'error', error: err.message, prompt: cleanPrompt };
+        showCaption('IMAGE GENERATION ERROR: ' + err.message, true);
+        setTimeout(() => {
+          if (this.activeArt?.status === 'error') this.activeArt = null;
+        }, 4000);
+      });
+    }
+
+    dismissArt() {
+      this.activeArt = null;
+      this.sound.playDing();
+    }
+
+    // ==========================================
+    // POINTER INTERACTIONS
+    // ==========================================
+    handlePointerDown(x, y, w, h) {
+      this.canvasBounds = { width: w, height: h };
+
+      // 1. Check dynamic buttons
+      for (const btn of this.activeButtons) {
+        if (x >= btn.x && x <= btn.x + btn.w && y >= btn.y && y <= btn.y + btn.h) {
+          btn.onClick();
+          return;
+        }
+      }
+
+      // 2. Art close button
+      if (this.activeArt && this.activeArt.status === 'loaded') {
+        const closeBtnX = w - 46;
+        const closeBtnY = 16;
+        if (x >= closeBtnX - 10 && x <= closeBtnX + 40 && y >= closeBtnY - 10 && y <= closeBtnY + 40) {
+          this.dismissArt();
+          return;
+        }
+      }
+
+      // 3. Mini-game interactions
+      if (this.activeGame === 'quick_tap' && this.gameState) {
+        if (this.gameState.stage === 'wait') {
+          this.gameState.stage = 'early';
+          this.sound.playBuzzer();
+          setState('angry', 'quick tap early');
+          showCaption('TOO EARLY! ❌\nWait for the green light before tapping!', true);
+          setTimeout(() => {
+            if (this.activeGame === 'quick_tap') this.startGame('quick_tap');
+          }, 2000);
+        } else if (this.gameState.stage === 'flash') {
+          const reactionMs = Math.round(performance.now() - this.gameState.flashStart);
+          this.gameState.reactionMs = reactionMs;
+          this.gameState.stage = 'success';
+          this.sound.playCheer();
+          this.particles.emitConfetti(w / 2, h / 2, 40);
+
+          let rank = 'LIGHTNING GOD ⚡';
+          if (reactionMs > 240) rank = 'PRO REFLEXES 🚀';
+          if (reactionMs > 350) rank = 'FAST SPEED 👍';
+          if (reactionMs > 500) rank = 'KEEP PRACTICING 🐢';
+          this.gameState.resultRank = rank;
+
+          setState('excited', 'quick tap win');
+          showCaption(`REFLEX SPEED: ${reactionMs} ms!\nRANK: ${rank}`, true);
+          speak(`Reaction speed: ${reactionMs} milliseconds! ${rank}!`);
+          setTimeout(() => {
+            if (this.activeGame === 'quick_tap') this.stopGame();
+          }, 4500);
+        }
+        return;
+      }
+
+      // 4. Robotic Hands slap/bump
+      if (this.activeHand === 'high_five') {
+        const handX = w / 2;
+        const handY = h * 0.58;
+        const dist = Math.hypot(x - handX, y - handY);
+        if (dist < 130) {
+          this.handState.recoilProgress = 1;
+          this.handState.slapCount++;
+          this.sound.playSlap();
+          this.particles.emitSparks(x, y, '#00e5ff', 30);
+          this.particles.emitShockwave(x, y, '#00e5ff', 80);
+          setState('excited', 'high five slap');
+          showCaption('HIGH FIVE! ✋\n*SLAP!* Great connection!', true);
+          speak("High five! Yes!");
+          return;
+        }
+      }
+
+      if (this.activeHand === 'fist_bump') {
+        const handX = w / 2;
+        const handY = h * 0.54;
+        const dist = Math.hypot(x - handX, y - handY);
+        if (dist < 120) {
+          this.handState.recoilProgress = 1;
+          this.sound.playDing();
+          this.particles.emitSparks(x, y, '#5fd4d0', 25);
+          this.particles.emitShockwave(x, y, '#5fd4d0', 95);
+          setState('happy', 'fist bump connect');
+          showCaption('BOOM! FIST BUMP! 👊\nRespect!', true);
+          speak("Boom! Fist bump!");
+          return;
+        }
+      }
+
+      // 5. Default Screen Touch Spark
+      this.particles.emitSparks(x, y, '#00e5ff', 12);
+      this.particles.emitShockwave(x, y, '#00e5ff', 45);
+    }
+
+    handlePointerMove(x, y, w, h, isDown) {
+      if (!isDown) {
+        this.tickleTracker.lastX = x;
+        this.tickleTracker.lastY = y;
+        return;
+      }
+
+      const dx = x - (this.tickleTracker.lastX || x);
+      const dy = y - (this.tickleTracker.lastY || y);
+      const step = Math.hypot(dx, dy);
+      this.tickleTracker.lastX = x;
+      this.tickleTracker.lastY = y;
+
+      if (step > 4 && step < 120) {
+        this.tickleTracker.strokeDist += step;
+        const now = performance.now();
+
+        if (this.tickleTracker.strokeDist > 140 && now - this.tickleTracker.lastStrokeTime > 250) {
+          this.tickleTracker.lastStrokeTime = now;
+          this.particles.emitHearts(x, y, 2);
+          this.sound.playPurr();
+          setState('love', 'being petted/tickled');
+
+          if (this.tickleTracker.strokeDist > 750) {
+            this.tickleTracker.strokeDist = 0;
+            this.sound.playCheer();
+            this.particles.emitConfetti(x, y, 25);
+            setState('excited', 'tickle laughter');
+            showCaption('HEHEHE! THAT TICKLES! 😂\nMax is in stitches!', true);
+            speak("Hahaha that tickles! Stop it!");
+          }
+        }
+      }
+    }
+
+    handlePointerUp() {
+      // Finished stroke
+    }
+
+    // ==========================================
+    // RENDERING PIPELINE (60 FPS)
+    // ==========================================
+    preRender(ctx, cw, ch, dt, faceProps) {
+      this.canvasBounds = { width: cw, height: ch };
+      this.activeButtons = []; // Reset clickable zones for current frame
+
+      // 1. Full-screen AI Art Display
+      if (this.activeArt && this.activeArt.status === 'loaded') {
+        this.renderArtDisplay(ctx, cw, ch, dt);
+        return true; // Suppress standard dome eyes
+      }
+
+      // 2. Audio Equalizer
+      if (this.activeVisualMode === 'equalizer') {
+        this.renderEqualizer(ctx, cw, ch, dt, faceProps);
+        return true; // Suppress standard dome eyes
+      }
+
+      // 3. Hypnotic Dizzy Spirals
+      if (this.activeVisualMode === 'dizzy') {
+        this.renderDizzySpirals(ctx, cw, ch, dt, faceProps);
+        return true; // Suppress standard dome eyes
+      }
+
+      // 4. Matrix Rain (Background Layer)
+      if (this.activeVisualMode === 'matrix') {
+        this.particles.renderMatrixRain(ctx, cw, ch, dt);
+        // Do NOT suppress standard eyes: glowing eyes gaze through the matrix rain!
+      }
+
+      // 5. Quick Tap Green Flash (Full Screen)
+      if (this.activeGame === 'quick_tap' && this.gameState?.stage === 'flash') {
+        ctx.save();
+        ctx.fillStyle = 'rgba(85, 197, 140, 0.45)';
+        ctx.fillRect(0, 0, cw, ch);
+        ctx.restore();
+      }
+
+      return false;
+    }
+
+    postRender(ctx, cw, ch, dt, faceProps) {
+      // 1. Render Active Robotic Hand
+      if (this.activeHand) {
+        this.renderHand(ctx, cw, ch, dt, faceProps);
+      }
+
+      // 2. Render Mini Games Overlay
+      if (this.activeGame) {
+        this.renderGameOverlay(ctx, cw, ch, dt, faceProps);
+      }
+
+      // 3. Cyber HUD Reticle Overlay
+      if (this.activeVisualMode === 'reticle') {
+        this.renderCyberReticle(ctx, cw, ch, dt, faceProps);
+      }
+
+      // 4. Render Particle System
+      this.particles.updateAndRender(ctx, dt);
+    }
+
+    // ==========================================
+    // VECTOR HAND DRAWING
+    // ==========================================
+    renderHand(ctx, cw, ch, dt, faceProps) {
+      const type = this.activeHand;
+      const s = Math.min(cw, ch);
+      const cx = cw / 2;
+      const cy = ch * 0.52;
+
+      ctx.save();
+      this.handState.t += dt / 1000;
+
+      // Recoil physics
+      if (this.handState.recoilProgress > 0) {
+        this.handState.recoilProgress = Math.max(0, this.handState.recoilProgress - (dt / 220));
+      }
+      const recoilOffset = Math.sin(this.handState.recoilProgress * Math.PI) * 26;
+
+      if (type === 'high_five') {
+        // High-five palm
+        const palmY = cy + 20 + recoilOffset;
+        const auraR = s * 0.22;
+        const pulse = 1 + Math.sin(this.handState.t * 5) * 0.06;
+
+        // Glowing pulsing ring
+        ctx.beginPath();
+        ctx.arc(cx, palmY, auraR * pulse, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(0, 229, 255, 0.4)';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+
+        // Palm plate
+        ctx.beginPath();
+        ctx.roundRect(cx - 52, palmY - 45, 104, 90, 24);
+        ctx.fillStyle = '#0a1d28';
+        ctx.fill();
+        ctx.strokeStyle = '#00e5ff';
+        ctx.lineWidth = 3;
+        ctx.shadowColor = '#00e5ff';
+        ctx.shadowBlur = 12;
+        ctx.stroke();
+
+        // 5 Segmented Fingers
+        [-40, -20, 0, 20, 40].forEach((ox, i) => {
+          const fH = i === 2 ? 65 : (i === 1 || i === 3 ? 55 : 44);
+          ctx.beginPath();
+          ctx.roundRect(cx + ox - 8, palmY - 45 - fH, 16, fH + 6, 8);
+          ctx.fillStyle = '#0f2937';
+          ctx.fill();
+          ctx.strokeStyle = '#00e5ff';
+          ctx.lineWidth = 2.5;
+          ctx.stroke();
+
+          // Joint line
+          ctx.beginPath();
+          ctx.moveTo(cx + ox - 6, palmY - 45 - fH * 0.5);
+          ctx.lineTo(cx + ox + 6, palmY - 45 - fH * 0.5);
+          ctx.strokeStyle = 'rgba(0, 229, 255, 0.8)';
+          ctx.stroke();
+        });
+
+        // Repulsor core in palm
+        ctx.beginPath();
+        ctx.arc(cx, palmY, 16, 0, Math.PI * 2);
+        ctx.fillStyle = '#00e5ff';
+        ctx.shadowBlur = 16;
+        ctx.fill();
+
+        // Floating label
+        ctx.font = '700 12px monospace';
+        ctx.fillStyle = '#dffefa';
+        ctx.textAlign = 'center';
+        ctx.shadowBlur = 6;
+        ctx.fillText('SLAP HIGH FIVE! ✋', cx, palmY + 68);
+
+        this.registerButton('high_five_target', cx - 70, palmY - 110, 140, 190, () => {
+          this.handlePointerDown(cx, palmY, cw, ch);
+        });
+
+      } else if (type === 'fist_bump') {
+        // Fist-bump isometric knuckles
+        const fistY = cy + 15 + recoilOffset;
+
+        ctx.beginPath();
+        ctx.roundRect(cx - 70, fistY - 35, 140, 70, 20);
+        ctx.fillStyle = '#0a1d28';
+        ctx.fill();
+        ctx.strokeStyle = '#5fd4d0';
+        ctx.lineWidth = 3.5;
+        ctx.shadowColor = '#5fd4d0';
+        ctx.shadowBlur = 14;
+        ctx.stroke();
+
+        // 4 Knuckle caps
+        [-45, -15, 15, 45].forEach(ox => {
+          ctx.beginPath();
+          ctx.arc(cx + ox, fistY - 12, 14, 0, Math.PI * 2);
+          ctx.fillStyle = '#164e63';
+          ctx.fill();
+          ctx.strokeStyle = '#00e5ff';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+
+          // Knuckle LED bar
+          ctx.beginPath();
+          ctx.arc(cx + ox, fistY - 12, 6, 0, Math.PI * 2);
+          ctx.fillStyle = '#00e5ff';
+          ctx.fill();
+        });
+
+        ctx.font = '700 12px monospace';
+        ctx.fillStyle = '#5fd4d0';
+        ctx.textAlign = 'center';
+        ctx.fillText('BUMP IT! 👊', cx, fistY + 60);
+
+        this.registerButton('fist_bump_target', cx - 75, fistY - 45, 150, 115, () => {
+          this.handlePointerDown(cx, fistY, cw, ch);
+        });
+
+      } else if (type === 'wave') {
+        // Waving hand
+        const waveAngle = Math.sin(this.handState.t * 7) * 0.32;
+        ctx.translate(cx, cy + 30);
+        ctx.rotate(waveAngle);
+
+        ctx.beginPath();
+        ctx.roundRect(-35, -50, 70, 75, 18);
+        ctx.fillStyle = '#0a1d28';
+        ctx.fill();
+        ctx.strokeStyle = '#00e5ff';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+
+        // Fingers
+        [-24, -8, 8, 24].forEach((ox, i) => {
+          const fh = 38 + (i === 1 || i === 2 ? 10 : 0);
+          ctx.beginPath();
+          ctx.roundRect(ox - 6, -50 - fh, 12, fh + 4, 6);
+          ctx.fillStyle = '#0f2937';
+          ctx.fill();
+          ctx.strokeStyle = '#00e5ff';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        });
+
+        ctx.font = '700 12px monospace';
+        ctx.fillStyle = '#dffefa';
+        ctx.textAlign = 'center';
+        ctx.fillText('HELLO FRIEND! 👋', 0, 52);
+
+      } else if (type === 'thumbs_up') {
+        // Thumbs up
+        ctx.beginPath();
+        ctx.roundRect(cx - 45, cy - 15, 90, 65, 16);
+        ctx.fillStyle = '#0a1d28';
+        ctx.fill();
+        ctx.strokeStyle = '#55c58c';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+
+        // Extended thumb
+        ctx.beginPath();
+        ctx.roundRect(cx - 38, cy - 65, 24, 58, 12);
+        ctx.fillStyle = '#103525';
+        ctx.fill();
+        ctx.strokeStyle = '#55c58c';
+        ctx.lineWidth = 2.5;
+        ctx.stroke();
+
+        // Glowing spark tip
+        ctx.beginPath();
+        ctx.arc(cx - 26, cy - 68, 6, 0, Math.PI * 2);
+        ctx.fillStyle = '#7ee59a';
+        ctx.shadowColor = '#55c58c';
+        ctx.shadowBlur = 12;
+        ctx.fill();
+
+        ctx.font = '700 12px monospace';
+        ctx.fillStyle = '#7ee59a';
+        ctx.textAlign = 'center';
+        ctx.fillText('AWESOME JOB! 👍', cx, cy + 74);
+
+      } else if (type === 'point') {
+        // Pointing index finger
+        ctx.beginPath();
+        ctx.roundRect(cx - 40, cy - 10, 80, 60, 16);
+        ctx.fillStyle = '#0a1d28';
+        ctx.fill();
+        ctx.strokeStyle = '#00e5ff';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+
+        // Extended index finger
+        ctx.beginPath();
+        ctx.roundRect(cx - 8, cy - 70, 16, 68, 8);
+        ctx.fillStyle = '#0f2937';
+        ctx.fill();
+        ctx.strokeStyle = '#00e5ff';
+        ctx.lineWidth = 2.5;
+        ctx.stroke();
+
+        // Laser line guide
+        ctx.beginPath();
+        ctx.moveTo(cx, cy - 72);
+        ctx.lineTo(cx, cy - 130);
+        ctx.strokeStyle = 'rgba(0, 229, 255, 0.65)';
+        ctx.setLineDash([4, 4]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        ctx.font = '700 12px monospace';
+        ctx.fillStyle = '#dffefa';
+        ctx.textAlign = 'center';
+        ctx.fillText('LOOK OVER THERE! ☝️', cx, cy + 72);
+      }
+
+      ctx.restore();
+    }
+
+    // ==========================================
+    // MINI GAMES RENDERING
+    // ==========================================
+    renderGameOverlay(ctx, cw, ch, dt, faceProps) {
+      const game = this.activeGame;
+      const s = this.gameState;
+      if (!s) return;
+
+      ctx.save();
+
+      if (game === 'quick_tap') {
+        if (s.stage === 'wait') {
+          s.timer += dt;
+          if (s.timer >= s.waitTimer) {
+            s.stage = 'flash';
+            s.flashStart = performance.now();
+            this.sound.playDing();
+          }
+          // Amber radar box
+          ctx.beginPath();
+          ctx.roundRect(cw / 2 - 130, ch * 0.16, 260, 48, 14);
+          ctx.fillStyle = 'rgba(12, 17, 28, 0.88)';
+          ctx.fill();
+          ctx.strokeStyle = '#f0b45b';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+
+          ctx.font = '700 11px monospace';
+          ctx.fillStyle = '#f0b45b';
+          ctx.textAlign = 'center';
+          ctx.fillText('⚡ QUICK TAP REFLEX', cw / 2, ch * 0.16 + 20);
+          ctx.font = '600 10px monospace';
+          ctx.fillStyle = '#fff';
+          ctx.fillText('WAIT FOR GREEN FLASH...', cw / 2, ch * 0.16 + 36);
+
+        } else if (s.stage === 'flash') {
+          ctx.font = '900 24px monospace';
+          ctx.fillStyle = '#55c58c';
+          ctx.textAlign = 'center';
+          ctx.shadowColor = '#55c58c';
+          ctx.shadowBlur = 18;
+          ctx.fillText('TAP NOW!! ⚡', cw / 2, ch * 0.22);
+
+        } else if (s.stage === 'early') {
+          ctx.font = '900 18px monospace';
+          ctx.fillStyle = '#e95c67';
+          ctx.textAlign = 'center';
+          ctx.fillText('TOO EARLY! ❌', cw / 2, ch * 0.22);
+
+        } else if (s.stage === 'success') {
+          ctx.beginPath();
+          ctx.roundRect(cw / 2 - 130, ch * 0.14, 260, 60, 16);
+          ctx.fillStyle = 'rgba(12, 28, 20, 0.92)';
+          ctx.fill();
+          ctx.strokeStyle = '#55c58c';
+          ctx.lineWidth = 2.5;
+          ctx.stroke();
+
+          ctx.font = '900 18px monospace';
+          ctx.fillStyle = '#7ee59a';
+          ctx.textAlign = 'center';
+          ctx.fillText(`${s.reactionMs} MS`, cw / 2, ch * 0.14 + 26);
+          ctx.font = '700 10px monospace';
+          ctx.fillStyle = '#fff';
+          ctx.fillText(s.resultRank, cw / 2, ch * 0.14 + 48);
+        }
+
+      } else if (game === 'rps') {
+        if (s.stage === 'countdown') {
+          s.timer += dt;
+          const remaining = Math.max(0, 3 - Math.floor(s.timer / 1000));
+          if (remaining === 0) {
+            s.stage = 'choose';
+          }
+          ctx.font = '900 36px monospace';
+          ctx.fillStyle = '#00e5ff';
+          ctx.textAlign = 'center';
+          ctx.shadowColor = '#00e5ff';
+          ctx.shadowBlur = 18;
+          ctx.fillText(String(remaining || 'SHOOT!'), cw / 2, ch * 0.22);
+
+        } else if (s.stage === 'choose') {
+          // Render 3 Cyber Interactive Buttons
+          const btnW = Math.min(90, cw * 0.26);
+          const btnH = 46;
+          const btnY = ch * 0.72;
+          const gap = 12;
+          const totalW = btnW * 3 + gap * 2;
+          const startX = (cw - totalW) / 2;
+
+          const options = [
+            { id: 'rock', icon: '🪨', label: 'ROCK', color: '#00e5ff' },
+            { id: 'paper', icon: '📄', label: 'PAPER', color: '#f0b45b' },
+            { id: 'scissors', icon: '✂️', label: 'SCISSORS', color: '#ff7654' }
+          ];
+
+          ctx.font = '700 11px monospace';
+          ctx.fillStyle = '#dffefa';
+          ctx.textAlign = 'center';
+          ctx.fillText('TAP YOUR CHOICE OR SAY IT:', cw / 2, btnY - 14);
+
+          options.forEach((opt, i) => {
+            const bx = startX + i * (btnW + gap);
+            ctx.beginPath();
+            ctx.roundRect(bx, btnY, btnW, btnH, 12);
+            ctx.fillStyle = 'rgba(12, 17, 28, 0.9)';
+            ctx.fill();
+            ctx.strokeStyle = opt.color;
+            ctx.lineWidth = 2;
+            ctx.shadowColor = opt.color;
+            ctx.shadowBlur = 8;
+            ctx.stroke();
+
+            ctx.font = '16px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(opt.icon, bx + btnW / 2, btnY + 22);
+
+            ctx.font = '700 8px monospace';
+            ctx.fillStyle = opt.color;
+            ctx.fillText(opt.label, bx + btnW / 2, btnY + 38);
+
+            this.registerButton(`rps_${opt.id}`, bx, btnY, btnW, btnH, () => {
+              this.playRPSChoice(opt.id);
+            });
+          });
+
+        } else if (s.stage === 'reveal') {
+          const outcomeColor = s.outcome === 'win' ? '#55c58c' : (s.outcome === 'lose' ? '#ff7654' : '#00e5ff');
+          const outcomeText = s.outcome === 'win' ? 'YOU WIN! 🎉' : (s.outcome === 'lose' ? 'MAX WINS! 🤖' : 'TIE GAME! 🤝');
+
+          ctx.beginPath();
+          ctx.roundRect(cw / 2 - 130, ch * 0.12, 260, 52, 14);
+          ctx.fillStyle = 'rgba(12, 17, 28, 0.94)';
+          ctx.fill();
+          ctx.strokeStyle = outcomeColor;
+          ctx.lineWidth = 2;
+          ctx.stroke();
+
+          ctx.font = '800 15px monospace';
+          ctx.fillStyle = outcomeColor;
+          ctx.textAlign = 'center';
+          ctx.fillText(outcomeText, cw / 2, ch * 0.12 + 25);
+
+          const pIcon = s.playerChoice === 'rock' ? '🪨' : (s.playerChoice === 'paper' ? '📄' : '✂️');
+          const mIcon = s.maxChoice === 'rock' ? '🪨' : (s.maxChoice === 'paper' ? '📄' : '✂️');
+          ctx.font = '11px monospace';
+          ctx.fillStyle = '#fff';
+          ctx.fillText(`YOU: ${pIcon}  vs  MAX: ${mIcon}`, cw / 2, ch * 0.12 + 43);
+        }
+
+      } else if (game === 'staring') {
+        const elapsed = performance.now() - s.startTime;
+        s.elapsed = elapsed;
+
+        // Auto win if held for 10 seconds
+        if (elapsed >= 10000 && !s.playerLost && !s.playerWon) {
+          s.playerWon = true;
+          this.sound.playCheer();
+          this.particles.emitConfetti(cw / 2, ch / 2, 45);
+          setState('surprised', 'staring contest player won');
+          showCaption('YOU WON! 🏆\nMax blinked first! Incredible focus!', true);
+          speak("Whew! You win! My optical sensors were burning!");
+        }
+
+        ctx.beginPath();
+        ctx.roundRect(cw / 2 - 130, ch * 0.12, 260, 44, 14);
+        ctx.fillStyle = 'rgba(12, 17, 28, 0.92)';
+        ctx.fill();
+        ctx.strokeStyle = '#00e5ff';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        ctx.font = '800 13px monospace';
+        ctx.fillStyle = '#00e5ff';
+        ctx.textAlign = 'center';
+        const timeSec = (elapsed / 1000).toFixed(1);
+        ctx.fillText(`👀 STARING: ${timeSec}s / 10.0s`, cw / 2, ch * 0.12 + 22);
+
+        ctx.font = '600 8.5px monospace';
+        ctx.fillStyle = '#8f98aa';
+        ctx.fillText("DON'T BLINK OR LOOK AWAY!", cw / 2, ch * 0.12 + 36);
+
+        // "I Blinked" surrender button
+        if (!s.playerWon && !s.playerLost) {
+          const btnW = 120;
+          const btnH = 34;
+          const btnX = (cw - btnW) / 2;
+          const btnY = ch * 0.74;
+
+          ctx.beginPath();
+          ctx.roundRect(btnX, btnY, btnW, btnH, 16);
+          ctx.fillStyle = 'rgba(233, 92, 103, 0.18)';
+          ctx.fill();
+          ctx.strokeStyle = '#e95c67';
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+
+          ctx.font = '700 9.5px monospace';
+          ctx.fillStyle = '#ff8890';
+          ctx.textAlign = 'center';
+          ctx.fillText('I BLINKED 😵', cw / 2, btnY + 21);
+
+          this.registerButton('staring_blinked', btnX, btnY, btnW, btnH, () => {
+            s.playerLost = true;
+            this.sound.playDing();
+            setState('happy', 'won staring contest');
+            showCaption('MAX WINS! 👀\nAha! I saw you blink!', true);
+            speak("Aha! You blinked! I win this round!");
+            setTimeout(() => {
+              if (this.activeGame === 'staring') this.stopGame();
+            }, 3500);
+          });
+        }
+
+      } else if (game === 'codebreaker') {
+        ctx.beginPath();
+        ctx.roundRect(cw / 2 - 130, ch * 0.10, 260, 48, 14);
+        ctx.fillStyle = 'rgba(12, 17, 28, 0.92)';
+        ctx.fill();
+        ctx.strokeStyle = '#f0b45b';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        ctx.font = '800 11px monospace';
+        ctx.fillStyle = '#f0b45b';
+        ctx.textAlign = 'center';
+        ctx.fillText('🔢 CODEBREAKER (1 - 10)', cw / 2, ch * 0.10 + 20);
+
+        ctx.font = '700 9px monospace';
+        ctx.fillStyle = s.solved ? '#55c58c' : '#fff';
+        ctx.fillText(s.hint, cw / 2, ch * 0.10 + 36);
+
+        // 10 Number Buttons across two rows of 5
+        if (!s.solved) {
+          const btnW = Math.min(42, cw * 0.15);
+          const btnH = 34;
+          const gap = 8;
+          const rowW = btnW * 5 + gap * 4;
+          const startX = (cw - rowW) / 2;
+          const startY = ch * 0.70;
+
+          for (let num = 1; num <= 10; num++) {
+            const row = num <= 5 ? 0 : 1;
+            const col = (num - 1) % 5;
+            const bx = startX + col * (btnW + gap);
+            const by = startY + row * (btnH + gap);
+
+            ctx.beginPath();
+            ctx.roundRect(bx, by, btnW, btnH, 8);
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
+            ctx.fill();
+            ctx.strokeStyle = 'rgba(240, 180, 91, 0.5)';
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+
+            ctx.font = '800 14px monospace';
+            ctx.fillStyle = '#f0b45b';
+            ctx.textAlign = 'center';
+            ctx.fillText(String(num), bx + btnW / 2, by + 22);
+
+            this.registerButton(`code_${num}`, bx, by, btnW, btnH, () => {
+              this.guessCodebreaker(num);
+            });
+          }
+        }
+
+      } else if (game === 'face_mimic') {
+        s.timer -= dt;
+        if (s.timer <= 0 && !s.solved) {
+          s.solved = true;
+          this.sound.playCheer();
+          this.particles.emitConfetti(cw / 2, ch / 2, 30);
+          showCaption('MIMIC COMPLETE! ⭐\nGreat expression matching!', true);
+          speak("Awesome job! You matched my face expression!");
+          setTimeout(() => {
+            if (this.activeGame === 'face_mimic') this.stopGame();
+          }, 3500);
+        }
+
+        ctx.beginPath();
+        ctx.roundRect(cw / 2 - 130, ch * 0.12, 260, 48, 14);
+        ctx.fillStyle = 'rgba(12, 17, 28, 0.92)';
+        ctx.fill();
+        ctx.strokeStyle = '#c084fc';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        ctx.font = '800 11px monospace';
+        ctx.fillStyle = '#c084fc';
+        ctx.textAlign = 'center';
+        ctx.fillText(`SIMON SAYS: ${s.target.toUpperCase()}!`, cw / 2, ch * 0.12 + 20);
+
+        ctx.font = '600 8.5px monospace';
+        ctx.fillStyle = '#fff';
+        const remSec = Math.max(0, (s.timer / 1000).toFixed(1));
+        ctx.fillText(`TIME LEFT: ${remSec}s · COPY MY FACE!`, cw / 2, ch * 0.12 + 36);
+
+        // "DONE" button
+        const btnW = 100;
+        const btnH = 34;
+        const btnX = (cw - btnW) / 2;
+        const btnY = ch * 0.74;
+
+        ctx.beginPath();
+        ctx.roundRect(btnX, btnY, btnW, btnH, 16);
+        ctx.fillStyle = 'rgba(192, 132, 252, 0.2)';
+        ctx.fill();
+        ctx.strokeStyle = '#c084fc';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        ctx.font = '700 10px monospace';
+        ctx.fillStyle = '#e9d5ff';
+        ctx.textAlign = 'center';
+        ctx.fillText('DONE 😊', cw / 2, btnY + 21);
+
+        this.registerButton('mimic_done', btnX, btnY, btnW, btnH, () => {
+          s.solved = true;
+          this.sound.playCheer();
+          this.particles.emitConfetti(cw / 2, ch / 2, 35);
+          showCaption('PERFECT MATCH! ⭐\nScore +100 PTS!', true);
+          speak("Perfect match! You are a master of expression!");
+          setTimeout(() => {
+            if (this.activeGame === 'face_mimic') this.stopGame();
+          }, 3500);
+        });
+      }
+
+      ctx.restore();
+    }
+
+    // ==========================================
+    // VISUAL TRANSFORMATIONS RENDERING
+    // ==========================================
+    renderEqualizer(ctx, cw, ch, dt, faceProps) {
+      this.visualState.timer += dt / 1000;
+      const numBars = 16;
+      const barW = Math.min(14, (cw * 0.7) / numBars);
+      const gap = 5;
+      const totalW = numBars * barW + (numBars - 1) * gap;
+      const startX = (cw - totalW) / 2;
+      const centerY = ch * 0.42;
+      const maxH = ch * 0.30;
+
+      ctx.save();
+
+      // Read audio data if available, else procedural rhythm
+      let realFreqs = null;
+      if (typeof micAnalyser !== 'undefined' && micAnalyser) {
+        try {
+          const arr = new Uint8Array(micAnalyser.frequencyBinCount);
+          micAnalyser.getByteFrequencyData(arr);
+          realFreqs = arr;
+        } catch (_) {}
+      }
+
+      for (let i = 0; i < numBars; i++) {
+        let val = 0;
+        if (realFreqs && realFreqs.length > 0) {
+          const idx = Math.floor((i / numBars) * (realFreqs.length * 0.4));
+          val = realFreqs[idx] / 255.0;
+        } else {
+          val = 0.2 + 0.45 * Math.sin(this.visualState.timer * 6 + i * 0.45) +
+                0.25 * Math.cos(this.visualState.timer * 11 + i * 0.8);
+          val = Math.max(0.08, Math.min(1, Math.abs(val)));
+        }
+
+        const barH = Math.max(6, val * maxH);
+        const bx = startX + i * (barW + gap);
+        const by = centerY - barH / 2;
+
+        // Color gradient from cyan to magenta to gold
+        const hue = (i / numBars) * 120 + 170;
+        ctx.fillStyle = `hsl(${hue}, 100%, 55%)`;
+        ctx.shadowColor = `hsl(${hue}, 100%, 55%)`;
+        ctx.shadowBlur = 10;
+
+        ctx.beginPath();
+        ctx.roundRect(bx, by, barW, barH, 4);
+        ctx.fill();
+
+        // Top peak cap
+        if (val > (this.visualState.eqPeaks[i] || 0)) {
+          this.visualState.eqPeaks[i] = val;
+        } else {
+          this.visualState.eqPeaks[i] = Math.max(0, (this.visualState.eqPeaks[i] || 0) - (dt / 800));
+        }
+        const capY = centerY - (this.visualState.eqPeaks[i] * maxH) / 2 - 4;
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(bx, capY, barW, 2.5);
+      }
+
+      ctx.font = '700 10px monospace';
+      ctx.fillStyle = '#00e5ff';
+      ctx.textAlign = 'center';
+      ctx.shadowBlur = 6;
+      ctx.fillText('AUDIO SPECTRUM EQUALIZER', cw / 2, centerY + maxH / 2 + 35);
+
+      ctx.restore();
+    }
+
+    renderDizzySpirals(ctx, cw, ch, dt, faceProps) {
+      this.visualState.dizzyAngle += dt * 0.006;
+      const isLandscape = cw > ch;
+      const eyeBase = isLandscape ? Math.min(ch * 0.44, cw * 0.22) : Math.min(cw * 0.32, ch * 0.22);
+      const eyeGap = eyeBase * 0.40;
+      const cx = cw / 2;
+      const cy = ch * 0.38 + Math.sin(this.visualState.dizzyAngle * 1.5) * 8;
+
+      ctx.save();
+      // Sway whole head
+      ctx.translate(cx, cy);
+      ctx.rotate(Math.sin(this.visualState.dizzyAngle * 2) * 0.08);
+      ctx.translate(-cx, -cy);
+
+      [-1, 1].forEach(side => {
+        const ex = cx + side * (eyeGap / 2 + eyeBase / 2);
+        const maxR = eyeBase * 0.48;
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(ex, cy, maxR, 0, Math.PI * 2);
+        ctx.clip();
+
+        // Draw swirling Archimedean spiral
+        ctx.beginPath();
+        const turns = 4.5;
+        const totalTheta = turns * Math.PI * 2;
+        const step = 0.08;
+        for (let th = 0; th < totalTheta; th += step) {
+          const r = (th / totalTheta) * maxR;
+          const angle = th * side + this.visualState.dizzyAngle * 4;
+          const px = ex + Math.cos(angle) * r;
+          const py = cy + Math.sin(angle) * r;
+          if (th === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
+        ctx.strokeStyle = '#00e5ff';
+        ctx.lineWidth = 3.5;
+        ctx.shadowColor = '#00e5ff';
+        ctx.shadowBlur = 12;
+        ctx.stroke();
+
+        ctx.restore();
+      });
+
+      // Woozy mouth
+      ctx.beginPath();
+      ctx.ellipse(cx, cy + eyeBase * 0.55, 14, 18, 0, 0, Math.PI * 2);
+      ctx.fillStyle = '#00e5ff';
+      ctx.fill();
+
+      ctx.font = '700 10px monospace';
+      ctx.fillStyle = '#5fd4d0';
+      ctx.textAlign = 'center';
+      ctx.fillText("WHOAAA... SO DIZZY! 🌀", cx, cy + eyeBase * 0.55 + 40);
+
+      ctx.restore();
+    }
+
+    renderCyberReticle(ctx, cw, ch, dt, faceProps) {
+      this.visualState.reticleAngle += dt * 0.0018;
+      const cx = cw / 2;
+      const cy = ch * 0.40;
+      const r = Math.min(cw, ch) * 0.35;
+
+      ctx.save();
+
+      // Rotating dashed outer ring
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(0, 229, 255, 0.4)';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([8, 12]);
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(this.visualState.reticleAngle);
+      ctx.translate(-cx, -cy);
+      ctx.stroke();
+      ctx.restore();
+
+      // Inner corner brackets
+      const bSize = 18;
+      const inR = r * 0.75;
+      const corners = [
+        [cx - inR, cy - inR, 1, 1],
+        [cx + inR, cy - inR, -1, 1],
+        [cx - inR, cy + inR, 1, -1],
+        [cx + inR, cy + inR, -1, -1]
+      ];
+      ctx.strokeStyle = '#00e5ff';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([]);
+      corners.forEach(([px, py, dx, dy]) => {
+        ctx.beginPath();
+        ctx.moveTo(px, py + dy * bSize);
+        ctx.lineTo(px, py);
+        ctx.lineTo(px + dx * bSize, py);
+        ctx.stroke();
+      });
+
+      // Azimuth and range telemetry text
+      ctx.font = '700 8px monospace';
+      ctx.fillStyle = 'rgba(0, 229, 255, 0.75)';
+      ctx.textAlign = 'left';
+      ctx.fillText(`AZ: ${((this.visualState.reticleAngle * 180 / Math.PI) % 360).toFixed(1)}°`, cx - inR, cy + inR + 18);
+      ctx.fillText(`RNG: ${(1.24 + Math.sin(this.visualState.reticleAngle) * 0.15).toFixed(2)}m`, cx + inR - 60, cy + inR + 18);
+
+      ctx.restore();
+    }
+
+    renderArtDisplay(ctx, cw, ch, dt) {
+      const art = this.activeArt;
+      if (!art || !art.img) return;
+
+      art.fadeAlpha = Math.min(1, (art.fadeAlpha || 0) + (dt / 320));
+
+      ctx.save();
+      ctx.globalAlpha = art.fadeAlpha;
+
+      // Dark background vignette
+      ctx.fillStyle = '#05070d';
+      ctx.fillRect(0, 0, cw, ch);
+
+      // Frame bounds: 78% width / 70% height
+      const fw = Math.min(cw * 0.82, ch * 0.82);
+      const fh = fw;
+      const fx = (cw - fw) / 2;
+      const fy = ch * 0.15;
+
+      // Draw Art Image scaled neatly
+      try {
+        ctx.drawImage(art.img, fx, fy, fw, fh);
+      } catch (_) {}
+
+      // Cyber Frame Border & Corner Accents
+      ctx.strokeStyle = '#00e5ff';
+      ctx.lineWidth = 2;
+      ctx.shadowColor = '#00e5ff';
+      ctx.shadowBlur = 10;
+      ctx.strokeRect(fx, fy, fw, fh);
+
+      // Glowing corner brackets
+      const cLen = 22;
+      ctx.lineWidth = 3.5;
+      [
+        [fx, fy, 1, 1],
+        [fx + fw, fy, -1, 1],
+        [fx, fy + fh, 1, -1],
+        [fx + fw, fy + fh, -1, -1]
+      ].forEach(([x, y, dx, dy]) => {
+        ctx.beginPath();
+        ctx.moveTo(x, y + dy * cLen);
+        ctx.lineTo(x, y);
+        ctx.lineTo(x + dx * cLen, y);
+        ctx.stroke();
+      });
+
+      // Cute Animated Mini-Eyes hovering above art admiring it!
+      const eyeY = fy - 22;
+      const eyeGap = 24;
+      const lookT = performance.now() / 1000;
+      [-1, 1].forEach(side => {
+        const ex = cw / 2 + side * (eyeGap / 2 + 10);
+        ctx.beginPath();
+        ctx.roundRect(ex - 8, eyeY - 6, 16, 12, 4);
+        ctx.fillStyle = '#00e5ff';
+        ctx.shadowColor = '#00e5ff';
+        ctx.shadowBlur = 8;
+        ctx.fill();
+
+        // Eye pupil looking down at the art
+        ctx.beginPath();
+        ctx.arc(ex + Math.sin(lookT * 2) * 1.5, eyeY + 2, 2.5, 0, Math.PI * 2);
+        ctx.fillStyle = '#05070d';
+        ctx.fill();
+      });
+
+      // Prompt Caption at bottom
+      ctx.font = '700 9.5px monospace';
+      ctx.fillStyle = '#5fd4d0';
+      ctx.textAlign = 'center';
+      ctx.shadowBlur = 4;
+      const promptSnippet = art.prompt.length > 40 ? art.prompt.slice(0, 38) + '...' : art.prompt;
+      ctx.fillText(`🎨 "${promptSnippet.toUpperCase()}"`, cw / 2, fy + fh + 22);
+
+      // Close [✕] Button at top right
+      const closeX = fx + fw - 28;
+      const closeY = fy + 8;
+      ctx.beginPath();
+      ctx.roundRect(closeX, closeY, 22, 22, 6);
+      ctx.fillStyle = 'rgba(12, 17, 28, 0.85)';
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      ctx.font = '700 11px monospace';
+      ctx.fillStyle = '#fff';
+      ctx.textAlign = 'center';
+      ctx.fillText('✕', closeX + 11, closeY + 15);
+
+      this.registerButton('close_art_btn', closeX - 4, closeY - 4, 30, 30, () => {
+        this.dismissArt();
+      });
+
+      ctx.restore();
+    }
+
+    registerButton(id, x, y, w, h, onClick) {
+      this.activeButtons.push({ id, x, y, w, h, onClick });
     }
   }
 
@@ -10878,6 +12757,89 @@ function hookRecognitionDiagnostics(r){
   robotActionEngine = new RobotActionEngine(robotConnectionManager);
   autonomousPlanner = new AutonomousPlanner(robotActionEngine, robotConnectionManager);
   autonomousPlanner.start();
+
+  cozmoInteractiveEngine = new CozmoInteractiveEngine();
+  window.cozmoInteractiveEngine = cozmoInteractiveEngine;
+  cozmoInteractiveEngine.attachCanvas(canvas);
+
+  // Wire interactive game buttons
+  $('#gameQuickTapBtn')?.addEventListener('click', () => {
+    switchScreen('face');
+    cozmoInteractiveEngine.startGame('quick_tap');
+  });
+  $('#gameRpsBtn')?.addEventListener('click', () => {
+    switchScreen('face');
+    cozmoInteractiveEngine.startGame('rps');
+  });
+  $('#gameStaringBtn')?.addEventListener('click', () => {
+    switchScreen('face');
+    cozmoInteractiveEngine.startGame('staring');
+  });
+  $('#gameCodebreakerBtn')?.addEventListener('click', () => {
+    switchScreen('face');
+    cozmoInteractiveEngine.startGame('codebreaker');
+  });
+  $('#gameMimicBtn')?.addEventListener('click', () => {
+    switchScreen('face');
+    cozmoInteractiveEngine.startGame('face_mimic');
+  });
+  $('#gameStopBtn')?.addEventListener('click', () => cozmoInteractiveEngine.stopGame());
+
+  // Wire vector robotic hand buttons
+  $('#handHighFiveBtn')?.addEventListener('click', () => {
+    switchScreen('face');
+    cozmoInteractiveEngine.showHand('high_five');
+  });
+  $('#handFistBumpBtn')?.addEventListener('click', () => {
+    switchScreen('face');
+    cozmoInteractiveEngine.showHand('fist_bump');
+  });
+  $('#handWaveBtn')?.addEventListener('click', () => {
+    switchScreen('face');
+    cozmoInteractiveEngine.showHand('wave');
+  });
+  $('#handThumbsUpBtn')?.addEventListener('click', () => {
+    switchScreen('face');
+    cozmoInteractiveEngine.showHand('thumbs_up');
+  });
+  $('#handPointBtn')?.addEventListener('click', () => {
+    switchScreen('face');
+    cozmoInteractiveEngine.showHand('point');
+  });
+  $('#handDismissBtn')?.addEventListener('click', () => cozmoInteractiveEngine.dismissHand());
+
+  // Wire visual transformations buttons
+  $('#visEqualizerBtn')?.addEventListener('click', () => {
+    switchScreen('face');
+    cozmoInteractiveEngine.setVisualMode('equalizer');
+  });
+  $('#visDizzyBtn')?.addEventListener('click', () => {
+    switchScreen('face');
+    cozmoInteractiveEngine.setVisualMode('dizzy');
+  });
+  $('#visReticleBtn')?.addEventListener('click', () => {
+    switchScreen('face');
+    cozmoInteractiveEngine.setVisualMode('reticle');
+  });
+  $('#visTickleBtn')?.addEventListener('click', () => {
+    switchScreen('face');
+    cozmoInteractiveEngine.setVisualMode('tickle');
+  });
+  $('#visMatrixBtn')?.addEventListener('click', () => {
+    switchScreen('face');
+    cozmoInteractiveEngine.setVisualMode('matrix');
+  });
+  $('#visClearBtn')?.addEventListener('click', () => cozmoInteractiveEngine.setVisualMode(null));
+
+  // Wire AI Art buttons
+  $('#aiArtGenerateBtn')?.addEventListener('click', () => {
+    const input = $('#aiArtPromptInput');
+    const prompt = (input?.value || '').trim() || 'cute robot cat with neon glowing eyes cyberpunk style';
+    switchScreen('face');
+    cozmoInteractiveEngine.generateAndDisplayArt(prompt);
+  });
+  $('#aiArtDismissBtn')?.addEventListener('click', () => cozmoInteractiveEngine.dismissArt());
+
   runDevChecks();
 
   // Wire gesture buttons

@@ -922,6 +922,58 @@ export default async function handler(
         ? JSON.parse(req.body)
         : req.body || {};
 
+    if (body.generateImage === true) {
+      const prompt =
+        String(
+          body.prompt || '',
+        ).trim();
+
+      if (!prompt) {
+        return json(
+          res,
+          400,
+          {
+            error:
+              'No image prompt supplied',
+            code:
+              'EMPTY_IMAGE_PROMPT',
+          },
+        );
+      }
+
+      const seed =
+        Math.floor(
+          Math.random() * 1000000,
+        );
+
+      const cleanPrompt =
+        prompt
+          .replace(
+            /[^\w\s,.-]/gi,
+            ' ',
+          )
+          .trim();
+
+      const imageUrl =
+        `https://image.pollinations.ai/prompt/${encodeURIComponent(
+          cleanPrompt,
+        )}?width=768&height=768&nologo=true&seed=${seed}`;
+
+      return json(
+        res,
+        200,
+        {
+          ok: true,
+          imageUrl,
+          prompt:
+            cleanPrompt,
+          seed,
+          engine:
+            'pollinations',
+        },
+      );
+    }
+
     if (body.tts === true) {
       const text =
         String(
