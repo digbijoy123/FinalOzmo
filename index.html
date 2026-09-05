@@ -10850,12 +10850,16 @@ function hookRecognitionDiagnostics(r){
     const val = elevenInput?.value?.trim() || '';
     const hint = $('#elevenKeyHint');
     if (!hint) return;
-    if (val && !val.startsWith('sk_')) {
-      hint.innerHTML = '<span style="color:var(--coral);font-weight:700;">⚠️ Invalid key format: must start with "sk_". You pasted the Key ID instead of the secret key!</span>';
-    } else if (val && val.startsWith('sk_')) {
-      hint.innerHTML = '<span style="color:var(--green);font-weight:700;">✓ Valid secret key format (starts with sk_)</span>';
+    if (!val) {
+      hint.innerHTML = 'Must be exactly 51 characters starting with <code>sk_</code> (copied from the creation popup).';
+      return;
+    }
+    if (!val.startsWith('sk_')) {
+      hint.innerHTML = '<span style="color:var(--coral);font-weight:700;">⚠️ Invalid key: must start with "sk_". Do NOT copy the Key ID from the table!</span>';
+    } else if (val.length !== 51 && val.length !== 32) {
+      hint.innerHTML = `<span style="color:var(--coral);font-weight:700;">⚠️ Invalid key (${val.length} chars, must be 51). Do NOT prepend "sk_" to a Key ID! In ElevenLabs, click "+ Create API Key" and copy the secret key from the popup!</span>`;
     } else {
-      hint.innerHTML = 'Must start with <code>sk_</code> (copy secret key when created, not Key ID).';
+      hint.innerHTML = '<span style="color:var(--green);font-weight:700;">✓ Valid ElevenLabs secret key format (51 chars)</span>';
     }
   }
   elevenInput?.addEventListener('input', updateElevenKeyStatus);
@@ -10877,10 +10881,10 @@ function hookRecognitionDiagnostics(r){
 
     updateElevenKeyStatus();
 
-    if (eKey && !eKey.startsWith('sk_')) {
-      showCaption('⚠️ ELEVENLABS KEY ERROR\nKeys start with "sk_". You entered Key ID instead of secret key!', true);
-      hideCaption(4500);
-      devLog('TTS ERROR', 'ElevenLabs API key does not start with sk_. You entered the Key ID instead of the secret key.');
+    if (eKey && (!eKey.startsWith('sk_') || (eKey.length !== 51 && eKey.length !== 32))) {
+      showCaption(`⚠️ ELEVENLABS KEY INVALID (${eKey.length} chars)\nMust be 51 chars! Click "+ Create API Key" in ElevenLabs & copy from popup.`, true);
+      hideCaption(5500);
+      devLog('TTS ERROR', `ElevenLabs key format invalid: ${eKey.length} chars. Must be 51 characters starting with sk_.`);
     } else {
       showCaption('API Keys Saved! Reconnecting AI brain…', true);
       hideCaption(3000);

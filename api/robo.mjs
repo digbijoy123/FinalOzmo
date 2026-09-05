@@ -573,9 +573,17 @@ async function elevenLabsTTS(
     );
   }
 
-  if (!apiKey.startsWith('sk_')) {
+  if (!apiKey.startsWith('sk_') && apiKey.length !== 32) {
     throw makeError(
       "API key ID used as API key. ElevenLabs API keys start with 'sk_'. Please copy the secret API key generated in your ElevenLabs dashboard, not the Key ID from the table.",
+      'ELEVENLABS_API_ERROR',
+      400,
+    );
+  }
+
+  if (apiKey.length !== 51 && apiKey.length !== 32) {
+    throw makeError(
+      `ElevenLabs API key must be exactly 51 characters, got ${apiKey.length}. Do not manually prepend 'sk_' to a Key ID; in your ElevenLabs dashboard, click '+ Create API Key' and copy the secret key from the popup modal.`,
       'ELEVENLABS_API_ERROR',
       400,
     );
