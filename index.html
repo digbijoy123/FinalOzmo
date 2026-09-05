@@ -7450,10 +7450,15 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
           if (session !== this.session) return;
           this.lastSpeechAt = performance.now();
           if (talking || this.mode === VoiceMode.SPEAKING) {
-            log('VOICE · sound/speech detected from user during speaking · muting Max');
-            if (typeof stopSpeakingAndListen === 'function') {
-              stopSpeakingAndListen('user-sound-detected');
+            // Sound/speech detected from user while robot is speaking: mute and listen!
+            if (performance.now() - (this.speechStartedAt || 0) > 500) {
+              log('VOICE · sound/speech detected from user during speaking · muting Max');
+              if (typeof stopSpeakingAndListen === 'function') {
+                stopSpeakingAndListen('user-sound-detected');
+              }
+              return;
             }
+            log('VOICE · speech/sound active during playback');
             return;
           }
           if (this.mode === VoiceMode.STANDBY_WAKE) {
@@ -7518,16 +7523,23 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
           if (bargeInText) break;
         }
         if (bargeInText.length >= 1) {
-          this.bargeInCount++;
-          const bCountEl = document.getElementById('devBargeInCount');
-          if (bCountEl) bCountEl.textContent = this.bargeInCount;
-          if (typeof stopSpeakingAndListen === 'function') {
-            stopSpeakingAndListen('voice-barge-in: ' + bargeInText);
-          }
-          this.transcriptBuffer = bargeInText;
-          showCaption('MAX HEARS\n' + bargeInText, true);
-          if (typeof updateRealtimeHud === 'function') {
-            updateRealtimeHud('BARGE-IN', `"${bargeInText.slice(0, 24)}"`, 'heard');
+          const normalizedBarge = bargeInText.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
+          const normalizedSpoken = (window.__currentSpokenText || currentTtsSpokenText || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
+          const isStopOrWake = /^(max|stop|wait|shut up|hold on|cancel|quiet|pause|listen|no|hey max|yo)\b/i.test(normalizedBarge);
+          const isSelfEcho = !isStopOrWake && normalizedSpoken && normalizedSpoken.includes(normalizedBarge) && (performance.now() - (this.speechStartedAt || 0) < 2200);
+
+          if (!isSelfEcho) {
+            this.bargeInCount++;
+            const bCountEl = document.getElementById('devBargeInCount');
+            if (bCountEl) bCountEl.textContent = this.bargeInCount;
+            if (typeof stopSpeakingAndListen === 'function') {
+              stopSpeakingAndListen('voice-barge-in: ' + bargeInText);
+            }
+            this.transcriptBuffer = bargeInText;
+            showCaption('MAX HEARS\n' + bargeInText, true);
+            if (typeof updateRealtimeHud === 'function') {
+              updateRealtimeHud('BARGE-IN', `"${bargeInText.slice(0, 24)}"`, 'heard');
+            }
           }
         }
         return;
@@ -7827,6 +7839,7 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
     }
 
     onSpeechStarted() {
+      this.speechStartedAt = performance.now();
       this.setMode(VoiceMode.SPEAKING);
       if (this.armed && !this.running && !this.starting) {
         this.scheduleRestart(10);
@@ -9619,9 +9632,11 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
       voiceEngine.onSpeechStarted();
       micBtn.classList.add('talking');
       setState('talking','talking · Max is speaking',{behavioral:true});
-      showLiveTtsCaption(clean);
+      const spokenText = String(text || '').trim();
+      window.__currentSpokenText = spokenText;
+      showLiveTtsCaption(spokenText);
       if(typeof updateRealtimeHud === 'function') {
-        updateRealtimeHud('SPEAKING', `"${clean.slice(0, 24)}"`, 'speaking');
+        updateRealtimeHud('SPEAKING', `"${spokenText.slice(0, 24)}"`, 'speaking');
       }
     };
 
@@ -9687,6 +9702,7 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
       voiceEngine.onSpeechStarted();
       micBtn.classList.add('talking');
       setState('talking','talking · Max is speaking',{behavioral:true});
+      window.__currentSpokenText = String(text || '').trim();
       showLiveTtsCaption(text);
       if(typeof updateRealtimeHud === 'function') {
         updateRealtimeHud('SPEAKING', `"${text.slice(0, 24)}"`, 'speaking');
@@ -9749,6 +9765,7 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
     log('TTS · response queued · ElevenLabs');
     ttsDiag('response queued · ElevenLabs');
     console.info('[ROBO TTS DEBUG] speak() entered', clean);
+    window.__currentSpokenText = clean;
     showLiveTtsCaption(clean);
     if(typeof updateRealtimeHud === 'function') {
       updateRealtimeHud('SPEAKING', `"${clean.slice(0, 24)}"`, 'speaking');
@@ -9790,6 +9807,12 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
 
     armWakeFromUserGesture();
     if ('speechSynthesis' in window) speechSynthesis.cancel();
+
+    // If Max is currently speaking, instant manual tap interruption
+    if (talking || (typeof voiceEngine !== 'undefined' && voiceEngine && voiceEngine.mode === VoiceMode.SPEAKING)) {
+      stopSpeakingAndListen('manual-tap-interruption');
+      return;
+    }
 
     // If already actively listening or in conversation, tap returns cleanly to standby
     if (voiceEngine.mode === VoiceMode.ACTIVE_LISTENING || voiceEngine.mode === VoiceMode.ACTIVE_CONVERSATION) {
@@ -9905,13 +9928,16 @@ async function refreshAIProviderDiagnostic(){
     if (qBadge) {
       if (el.subscription) {
         qBadge.style.display = 'block';
+        const charLimit = (el.subscription.characterLimit != null ? Number(el.subscription.characterLimit) : 10000).toLocaleString();
+        const remCredits = (el.subscription.remaining != null ? Number(el.subscription.remaining) : 0).toLocaleString();
+        const tierName = el.subscription.tier || 'free';
         if (el.subscription.isExhausted || el.subscription.remaining === 0) {
           elevenLabsQuotaExhausted = true;
-          qBadge.innerHTML = `<span style="color:var(--coral);font-weight:700;">⚠️ ElevenLabs Quota: 0 / ${el.subscription.characterLimit.toLocaleString()} credits remaining (EXHAUSTED). Free monthly limit reached! Chrome browser voice is active until credits reset.</span>`;
+          qBadge.innerHTML = `<span style="color:var(--coral);font-weight:700;">⚠️ ElevenLabs Quota: 0 / ${charLimit} credits remaining (EXHAUSTED). Free monthly limit reached! Chrome browser voice is active until credits reset.</span>`;
           devLog('TTS', 'ElevenLabs quota exhausted: 0 credits remaining on account.');
         } else {
           elevenLabsQuotaExhausted = false;
-          qBadge.innerHTML = `<span style="color:var(--green);font-weight:700;">✓ ElevenLabs Credits: ${el.subscription.remaining.toLocaleString()} / ${el.subscription.characterLimit.toLocaleString()} remaining (${el.subscription.tier} tier)</span>`;
+          qBadge.innerHTML = `<span style="color:var(--green);font-weight:700;">✓ ElevenLabs Credits: ${remCredits} / ${charLimit} remaining (${tierName} tier)</span>`;
         }
       } else if (el.keyFormatError) {
         qBadge.style.display = 'block';
