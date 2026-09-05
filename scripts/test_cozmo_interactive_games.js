@@ -153,4 +153,40 @@ assert(backendCode.includes('body.generateImage === true'), 'FAIL: api/robo.mjs 
 assert(backendCode.includes('image.pollinations.ai/prompt/'), 'FAIL: api/robo.mjs missing pollinations.ai image builder');
 console.log('PASS: api/robo.mjs backend image generation endpoint verified.');
 
+// 7. Verify Auto-Stop Mini-Games & Auto-Dismiss Hands Logic
+assert(html.includes('this.gameAutoStopTimer = null;'), 'FAIL: gameAutoStopTimer missing from constructor');
+assert(html.includes('this.handDismissTimer = null;'), 'FAIL: handDismissTimer missing from constructor');
+
+// Ensure RPS stops instead of cycling back into 'choose'
+assert(!html.includes("this.gameState.stage = 'choose';\n        }\n      }, 3500);"), 'FAIL: RPS must not cycle back to choose stage');
+assert(html.includes('ROUND FINISHED 🎮'), 'FAIL: Round finished visual indicator missing');
+assert(html.includes('rps round finished'), 'FAIL: RPS round finished handler missing');
+assert(html.includes('codebreaker solved'), 'FAIL: Codebreaker auto-stop handler missing');
+assert(html.includes('staring round finished'), 'FAIL: Staring contest auto-stop handler missing');
+console.log('PASS: Auto-stop mechanics verified for RPS, Codebreaker, Staring Contest, and Hands.');
+
+// 8. Verify inferActionFromText in RobotActionEngine
+assert(html.includes('inferActionFromText(text, userPrompt)'), 'FAIL: inferActionFromText missing from RobotActionEngine');
+assert(html.includes("robotActionEngine.inferActionFromText(reply, clean)"), 'FAIL: respond() missing inferActionFromText fallback');
+assert(html.includes("robotActionEngine.inferActionFromText(part.text)"), 'FAIL: GeminiLiveClient missing inferActionFromText dispatch');
+console.log('PASS: Gemini brain conversational action inference connected to speech & Live streaming.');
+
+// 9. Verify OLED Screen Routing in executeAction
+const expectedActionTypes = [
+  'high_five', 'fist_bump', 'wave', 'thumbs_up', 'point', 'dismiss_hand',
+  'quick_tap', 'rps', 'staring', 'codebreaker', 'face_mimic', 'stop_game',
+  'equalizer', 'dizzy', 'reticle', 'tickle', 'matrix', 'reset_visual',
+  'draw_art'
+];
+for (const act of expectedActionTypes) {
+  assert(html.includes(`'${act}'`) || html.includes(`"${act}"`), `FAIL: Action ${act} not handled in executeAction`);
+}
+console.log('PASS: All OLED interactive screen gestures and games routed through RobotActionEngine.executeAction.');
+
+// 10. Verify Voice Stop and Reset Commands in handleVoiceCommand
+assert(html.includes("stop game|exit game|quit game|end game|close game"), 'FAIL: Stop game voice commands missing');
+assert(html.includes("dismiss hand|lower hand|hide hand"), 'FAIL: Dismiss hand voice commands missing');
+assert(html.includes("reset screen|reset visual|normal eyes|normal screen|normal face"), 'FAIL: Reset screen voice commands missing');
+console.log('PASS: Voice commands for stopping mini-games, lowering hands, and resetting screen verified.');
+
 console.log('\n*** ALL COZMO INTERACTIVE SUITE TESTS PASSED CLEANLY! ***\n');

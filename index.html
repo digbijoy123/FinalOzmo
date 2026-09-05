@@ -7992,6 +7992,12 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
             if (part.text) {
               showCaption('MAX SAYS\n' + part.text, true);
               devLog('LIVE SAYS', part.text);
+              if (typeof robotActionEngine !== 'undefined' && robotActionEngine) {
+                const liveAction = robotActionEngine.inferActionFromText(part.text);
+                if (liveAction) {
+                  robotActionEngine.executeAction(liveAction);
+                }
+              }
             }
           }
         }
@@ -9207,6 +9213,9 @@ function getUserMediaWithTimeout(constraints, timeoutMs=12000){
       const reply=String(data.text).trim();
       if(data?.action && typeof robotActionEngine !== 'undefined') {
         robotActionEngine.executeAction(data.action);
+      } else if (typeof robotActionEngine !== 'undefined') {
+        const inferred = robotActionEngine.inferActionFromText(reply, clean);
+        if (inferred) robotActionEngine.executeAction(inferred);
       }
       extractImplicitMemories(clean);
       recordEpisode(`User: "${clean.slice(0, 50)}" — Max: "${reply.slice(0, 50)}"`, 'conversation', emotion);
@@ -10844,14 +10853,59 @@ function hookRecognitionDiagnostics(r){
       this.isPerformingAction = false;
     }
 
+    inferActionFromText(text, userPrompt) {
+      const combined = `${String(userPrompt || '')} ${String(text || '')}`.toLowerCase();
+      // Emergency / Stop
+      if (/\b(emergency stop|e-stop|freeze)\b/.test(combined)) return { type: 'stop' };
+      if (/\b(stop game|exit game|quit game|end game|close game)\b/.test(combined)) return { type: 'stop_game' };
+      if (/\b(dismiss hand|lower hand|hide hand)\b/.test(combined)) return { type: 'dismiss_hand' };
+      if (/\b(reset screen|reset visual|normal eyes|normal screen|normal face)\b/.test(combined)) return { type: 'reset_visual' };
+
+      // Mini-Games
+      if (/\b(quick tap|tap reflex|speed tap)\b/.test(combined)) return { type: 'quick_tap' };
+      if (/\b(rock paper scissors|stone paper scissors|play rps)\b/.test(combined)) return { type: 'rps' };
+      if (/\b(staring contest|don't blink|dont blink)\b/.test(combined)) return { type: 'staring' };
+      if (/\b(codebreaker|guess my number|guess the number)\b/.test(combined)) return { type: 'codebreaker' };
+      if (/\b(face mimic|simon says|mimic game)\b/.test(combined)) return { type: 'face_mimic' };
+
+      // Robotic Hands / OLED gestures
+      if (/\b(high five|high-five|gimme five|slap my hand)\b/.test(combined)) return { type: 'high_five' };
+      if (/\b(fist bump|fist-bump|bump it)\b/.test(combined)) return { type: 'fist_bump' };
+      if (/\b(wave|wave hand|waving)\b/.test(combined)) return { type: 'wave' };
+      if (/\b(thumbs up|good job)\b/.test(combined)) return { type: 'thumbs_up' };
+      if (/\b(point at|pointing)\b/.test(combined)) return { type: 'point' };
+
+      // OLED Visuals
+      if (/\b(equalizer|audio visualizer|music visualizer)\b/.test(combined)) return { type: 'equalizer' };
+      if (/\b(dizzy eyes|get dizzy|hypnotic)\b/.test(combined)) return { type: 'dizzy' };
+      if (/\b(cyber hud|targeting mode|hud reticle)\b/.test(combined)) return { type: 'reticle' };
+      if (/\b(matrix rain|cyberpunk rain|digital rain)\b/.test(combined)) return { type: 'matrix' };
+      if (/\b(tickle|pet you|good robot)\b/.test(combined)) return { type: 'tickle' };
+
+      // Physical Gestures
+      if (/\b(dance|dancing|dance for me)\b/.test(combined)) return { type: 'dance' };
+      if (/\b(spin around|spinning|spin)\b/.test(combined)) return { type: 'spin' };
+      if (/\b(nod your head|nodding|nod)\b/.test(combined)) return { type: 'nod' };
+      if (/\b(shake your head|shake head)\b/.test(combined)) return { type: 'shake_head' };
+      if (/\b(celebrate|hurray|hooray)\b/.test(combined)) return { type: 'celebrate' };
+
+      // Art Generation
+      const drawM = combined.match(/\b(?:draw|paint|sketch|generate an? image of|picture of)\s+([a-z0-9\s]{3,40})/i);
+      if (drawM && drawM[1] && !/\b(graph|table|circle|rectangle)\b/.test(drawM[1])) {
+        return { type: 'draw_art', prompt: drawM[1].trim() };
+      }
+      return null;
+    }
+
     executeAction(action) {
       if (!action || !action.type || action.type === 'none') return;
       const type = String(action.type).toLowerCase();
       const speed = Number(action.speed) || 45;
       const duration = Number(action.duration) || 600;
 
-      devLog('ACTION', `Executing action: ${type}`, { speed, duration });
+      devLog('ACTION', `Executing action: ${type}`, { speed, duration, prompt: action.prompt });
 
+      // Physical motor actions
       switch (type) {
         case 'forward':
           return this.forward(speed, duration);
@@ -10876,6 +10930,56 @@ function hookRecognitionDiagnostics(r){
           return this.celebrate();
         case 'stop':
           return this.stop();
+      }
+
+      // OLED Screen & Cozmo Interactive Engine routing
+      if (typeof cozmoInteractiveEngine !== 'undefined' && cozmoInteractiveEngine) {
+        if (typeof switchScreen === 'function') {
+          switchScreen('face');
+        }
+
+        // Robotic hands
+        if (['high_five', 'fist_bump', 'wave', 'thumbs_up', 'point'].includes(type)) {
+          cozmoInteractiveEngine.showHand(type);
+          return { type, oled: true };
+        }
+        if (type === 'dismiss_hand') {
+          cozmoInteractiveEngine.dismissHand();
+          return { type, oled: true };
+        }
+
+        // Mini-games
+        if (['quick_tap', 'rps', 'staring', 'codebreaker', 'face_mimic'].includes(type)) {
+          cozmoInteractiveEngine.startGame(type);
+          return { type, oled: true };
+        }
+        if (type === 'stop_game') {
+          cozmoInteractiveEngine.stopGame();
+          setState('happy', 'game stopped');
+          hideCaption();
+          return { type, oled: true };
+        }
+
+        // Visual Transformations
+        if (['equalizer', 'dizzy', 'reticle', 'tickle', 'matrix'].includes(type)) {
+          cozmoInteractiveEngine.setVisualMode(type);
+          return { type, oled: true };
+        }
+        if (type === 'reset_visual') {
+          cozmoInteractiveEngine.setVisualMode(null);
+          cozmoInteractiveEngine.dismissHand();
+          cozmoInteractiveEngine.dismissArt();
+          cozmoInteractiveEngine.stopGame();
+          hideCaption();
+          return { type, oled: true };
+        }
+
+        // AI Art Generation on OLED
+        if (type === 'draw_art' || type === 'generate_art') {
+          const prompt = action.prompt || action.query || 'cute robot cyber friend';
+          cozmoInteractiveEngine.generateAndDisplayArt(prompt);
+          return { type, prompt, oled: true };
+        }
       }
     }
 
@@ -11069,6 +11173,29 @@ function hookRecognitionDiagnostics(r){
             cozmoInteractiveEngine.generateAndDisplayArt(artPrompt);
             return { handled: true, type: 'ai_art', reply: `Synthesizing neural visual: "${artPrompt}"! Standby for OLED feed!`, emotion: 'thinking' };
           }
+        }
+
+        // Voice Mini-Game Stop & Dismiss Controls
+        if (/\b(stop game|exit game|quit game|end game|close game)\b/.test(l)) {
+          cozmoInteractiveEngine.stopGame();
+          setState('happy', 'game stopped via voice');
+          hideCaption();
+          return { handled: true, type: 'stop_game', reply: "Exiting game. Back to normal face mode!", emotion: 'happy' };
+        }
+
+        if (/\b(dismiss hand|lower hand|hide hand|put hand down)\b/.test(l)) {
+          cozmoInteractiveEngine.dismissHand();
+          hideCaption();
+          return { handled: true, type: 'dismiss_hand', reply: "Lowering hand.", emotion: 'happy' };
+        }
+
+        if (/\b(reset screen|reset visual|normal eyes|normal screen|normal face|clear screen)\b/.test(l)) {
+          cozmoInteractiveEngine.setVisualMode(null);
+          cozmoInteractiveEngine.dismissHand();
+          cozmoInteractiveEngine.dismissArt();
+          cozmoInteractiveEngine.stopGame();
+          hideCaption();
+          return { handled: true, type: 'reset_visual', reply: "Screen reset to normal face!", emotion: 'happy' };
         }
       }
 
@@ -11314,6 +11441,8 @@ function hookRecognitionDiagnostics(r){
 
       this.canvasBounds = { width: 450, height: 450 };
       this.activeButtons = []; // Dynamic clickable bounds on canvas: { id, x, y, w, h, onClick }
+      this.gameAutoStopTimer = null;
+      this.handDismissTimer = null;
     }
 
     attachCanvas(canvasElement) {
@@ -11335,14 +11464,31 @@ function hookRecognitionDiagnostics(r){
     // ROBOTIC HANDS CONTROLS
     // ==========================================
     showHand(type) {
+      if (this.handDismissTimer) {
+        clearTimeout(this.handDismissTimer);
+        this.handDismissTimer = null;
+      }
       this.activeHand = type;
       this.handState = { x: 0, y: 0, recoilProgress: 0, t: 0, slapCount: 0 };
       this.sound.playDing();
       showCaption('MAX GESTURE\n' + type.toUpperCase().replace('_', ' '), true);
+
+      // Auto dismiss hands after display duration (longer fallback for interactive hands)
+      const autoDismissTime = (type === 'high_five' || type === 'fist_bump') ? 9000 : 4200;
+      this.handDismissTimer = setTimeout(() => {
+        if (this.activeHand === type) {
+          this.dismissHand();
+        }
+      }, autoDismissTime);
     }
 
     dismissHand() {
+      if (this.handDismissTimer) {
+        clearTimeout(this.handDismissTimer);
+        this.handDismissTimer = null;
+      }
       this.activeHand = null;
+      hideCaption();
     }
 
     // ==========================================
@@ -11411,8 +11557,13 @@ function hookRecognitionDiagnostics(r){
     }
 
     stopGame() {
+      if (this.gameAutoStopTimer) {
+        clearTimeout(this.gameAutoStopTimer);
+        this.gameAutoStopTimer = null;
+      }
       this.activeGame = null;
       this.gameState = {};
+      hideCaption();
     }
 
     playRPSChoice(playerChoice) {
@@ -11456,9 +11607,16 @@ function hookRecognitionDiagnostics(r){
         speak(`We both chose ${playerChoice}! It's a tie!`);
       }
 
-      setTimeout(() => {
-        if (this.activeGame === 'rps' && this.gameState?.stage === 'reveal') {
-          this.gameState.stage = 'choose';
+      // Auto stop after round completes so game doesn't loop forever
+      if (this.gameAutoStopTimer) clearTimeout(this.gameAutoStopTimer);
+      this.gameAutoStopTimer = setTimeout(() => {
+        if (this.activeGame === 'rps') {
+          this.stopGame();
+          setState('happy', 'rps round finished');
+          showCaption('ROUND FINISHED 🎮\nGood game!', true);
+          setTimeout(() => {
+            if (!this.activeGame) hideCaption();
+          }, 2200);
         }
       }, 3500);
     }
@@ -11480,6 +11638,19 @@ function hookRecognitionDiagnostics(r){
         this.gameState.hint = `BINGO! THE CODE WAS ${secret}!`;
         showCaption(`CODE CRACKED!\n${secret} was correct in ${this.gameState.attempts} attempts!`, true);
         speak(reply);
+
+        // Auto-stop after code solved
+        if (this.gameAutoStopTimer) clearTimeout(this.gameAutoStopTimer);
+        this.gameAutoStopTimer = setTimeout(() => {
+          if (this.activeGame === 'codebreaker') {
+            this.stopGame();
+            setState('happy', 'codebreaker solved');
+            showCaption('ROUND FINISHED 🎮\nCode cracked!', true);
+            setTimeout(() => {
+              if (!this.activeGame) hideCaption();
+            }, 2200);
+          }
+        }, 3500);
         return { reply, emotion: 'excited' };
       } else if (guess < secret) {
         this.sound.playDing();
@@ -11617,9 +11788,14 @@ function hookRecognitionDiagnostics(r){
           this.sound.playBuzzer();
           setState('angry', 'quick tap early');
           showCaption('TOO EARLY! ❌\nWait for the green light before tapping!', true);
-          setTimeout(() => {
-            if (this.activeGame === 'quick_tap') this.startGame('quick_tap');
-          }, 2000);
+          if (this.gameAutoStopTimer) clearTimeout(this.gameAutoStopTimer);
+          this.gameAutoStopTimer = setTimeout(() => {
+            if (this.activeGame === 'quick_tap') {
+              this.stopGame();
+              setState('happy', 'quick tap stopped');
+              hideCaption();
+            }
+          }, 2500);
         } else if (this.gameState.stage === 'flash') {
           const reactionMs = Math.round(performance.now() - this.gameState.flashStart);
           this.gameState.reactionMs = reactionMs;
@@ -11636,9 +11812,17 @@ function hookRecognitionDiagnostics(r){
           setState('excited', 'quick tap win');
           showCaption(`REFLEX SPEED: ${reactionMs} ms!\nRANK: ${rank}`, true);
           speak(`Reaction speed: ${reactionMs} milliseconds! ${rank}!`);
-          setTimeout(() => {
-            if (this.activeGame === 'quick_tap') this.stopGame();
-          }, 4500);
+          if (this.gameAutoStopTimer) clearTimeout(this.gameAutoStopTimer);
+          this.gameAutoStopTimer = setTimeout(() => {
+            if (this.activeGame === 'quick_tap') {
+              this.stopGame();
+              setState('happy', 'quick tap finished');
+              showCaption('ROUND FINISHED 🎮\nReflexes recorded!', true);
+              setTimeout(() => {
+                if (!this.activeGame) hideCaption();
+              }, 2200);
+            }
+          }, 3500);
         }
         return;
       }
@@ -11657,6 +11841,10 @@ function hookRecognitionDiagnostics(r){
           setState('excited', 'high five slap');
           showCaption('HIGH FIVE! ✋\n*SLAP!* Great connection!', true);
           speak("High five! Yes!");
+          if (this.handDismissTimer) clearTimeout(this.handDismissTimer);
+          this.handDismissTimer = setTimeout(() => {
+            if (this.activeHand === 'high_five') this.dismissHand();
+          }, 2400);
           return;
         }
       }
@@ -11673,6 +11861,10 @@ function hookRecognitionDiagnostics(r){
           setState('happy', 'fist bump connect');
           showCaption('BOOM! FIST BUMP! 👊\nRespect!', true);
           speak("Boom! Fist bump!");
+          if (this.handDismissTimer) clearTimeout(this.handDismissTimer);
+          this.handDismissTimer = setTimeout(() => {
+            if (this.activeHand === 'fist_bump') this.dismissHand();
+          }, 2400);
           return;
         }
       }
@@ -12164,6 +12356,17 @@ function hookRecognitionDiagnostics(r){
           setState('surprised', 'staring contest player won');
           showCaption('YOU WON! 🏆\nMax blinked first! Incredible focus!', true);
           speak("Whew! You win! My optical sensors were burning!");
+          if (this.gameAutoStopTimer) clearTimeout(this.gameAutoStopTimer);
+          this.gameAutoStopTimer = setTimeout(() => {
+            if (this.activeGame === 'staring') {
+              this.stopGame();
+              setState('happy', 'staring round finished');
+              showCaption('ROUND FINISHED 🎮\nGreat staring focus!', true);
+              setTimeout(() => {
+                if (!this.activeGame) hideCaption();
+              }, 2200);
+            }
+          }, 3500);
         }
 
         ctx.beginPath();
@@ -12276,9 +12479,14 @@ function hookRecognitionDiagnostics(r){
           this.particles.emitConfetti(cw / 2, ch / 2, 30);
           showCaption('MIMIC COMPLETE! ⭐\nGreat expression matching!', true);
           speak("Awesome job! You matched my face expression!");
-          setTimeout(() => {
-            if (this.activeGame === 'face_mimic') this.stopGame();
-          }, 3500);
+          if (this.gameAutoStopTimer) clearTimeout(this.gameAutoStopTimer);
+          this.gameAutoStopTimer = setTimeout(() => {
+            if (this.activeGame === 'face_mimic') {
+              this.stopGame();
+              setState('happy', 'face mimic finished');
+              hideCaption();
+            }
+          }, 3200);
         }
 
         ctx.beginPath();
@@ -12324,9 +12532,14 @@ function hookRecognitionDiagnostics(r){
           this.particles.emitConfetti(cw / 2, ch / 2, 35);
           showCaption('PERFECT MATCH! ⭐\nScore +100 PTS!', true);
           speak("Perfect match! You are a master of expression!");
-          setTimeout(() => {
-            if (this.activeGame === 'face_mimic') this.stopGame();
-          }, 3500);
+          if (this.gameAutoStopTimer) clearTimeout(this.gameAutoStopTimer);
+          this.gameAutoStopTimer = setTimeout(() => {
+            if (this.activeGame === 'face_mimic') {
+              this.stopGame();
+              setState('happy', 'face mimic finished');
+              hideCaption();
+            }
+          }, 3200);
         });
       }
 
